@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { calculateFullFunnel } from '@/lib/calculations/funnel'
 import { FUNNEL_STAGES } from '@/lib/config/conversionBenchmarks'
 import { calculateManagerStats, ManagerStats } from '@/lib/analytics/funnel'
+import { getSettingsForUser } from '@/lib/settings/context'
+import type { SettingsShape } from '@/lib/settings/getSettings'
 
 interface FunnelStageForChart {
   stage: string
@@ -43,6 +45,7 @@ interface FunnelResponse {
   bottomPerformers: Array<ManagerStats & { id: string; name: string }>
   sideFlow: ReturnType<typeof calculateFullFunnel>['sideFlow']
   northStarKpi: ReturnType<typeof calculateFullFunnel>['northStarKpi']
+  settings: SettingsShape
 }
 
 export async function GET(request: NextRequest) {
@@ -75,6 +78,8 @@ export async function GET(request: NextRequest) {
       date: { gte: startDate, lte: endDate },
       ...(targetUserId && { userId: targetUserId }),
     }
+
+    const { settings } = await getSettingsForUser(user.id, user.role)
 
     const aggregate = await prisma.report.aggregate({
       where: whereClause,
@@ -122,7 +127,10 @@ export async function GET(request: NextRequest) {
       refusalByStage: refusalByStageTotals,
     }
 
-    const { funnel, sideFlow, northStarKpi } = calculateFullFunnel(totals)
+    const { funnel, sideFlow, northStarKpi } = calculateFullFunnel(totals, {
+      benchmarks: settings.conversionBenchmarks,
+      northStarTarget: settings.northStarTarget,
+    })
 
     const funnelForChart: FunnelStageForChart[] = funnel.map((stage) => ({
       stage: stage.stage,
@@ -146,7 +154,10 @@ export async function GET(request: NextRequest) {
 
     const managerStats: Array<ManagerStats & { id: string; name: string }> = await Promise.all(
       employees.map(async (emp): Promise<ManagerStats & { id: string; name: string }> => ({
-        ...(await calculateManagerStats(emp.reports, emp.id)),
+        ...(await calculateManagerStats(emp.reports, emp.id, {
+          salesPerDeal: settings.salesPerDeal,
+          planMode: 'user',
+        })),
         id: emp.id,
         name: emp.name,
       }))
@@ -184,6 +195,7 @@ export async function GET(request: NextRequest) {
       bottomPerformers,
       sideFlow,
       northStarKpi,
+      settings,
     }
 
     return NextResponse.json(response)

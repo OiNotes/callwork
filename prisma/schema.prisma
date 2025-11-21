@@ -59,6 +59,7 @@ model User {
   managedUsers User[]   @relation("ManagerToEmployees")
   manager      User?    @relation("ManagerToEmployees", fields: [managerId], references: [id])
   managerId    String?
+  ropSettings  RopSettings?
 
   @@index([email])
   @@index([telegramId])
@@ -151,4 +152,20 @@ model MotivationGrade {
   commissionRate Decimal  @db.Decimal(5, 4) /// Храним долю (0.05 = 5%)
 
   @@index([minTurnover, maxTurnover])
+}
+
+model RopSettings {
+  id                   String   @id @default(cuid())
+  managerId            String?  @unique
+  manager              User?    @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  departmentGoal       Decimal? @db.Decimal(12, 2)
+  conversionBenchmarks Json?
+  alertThresholds      Json?
+  activityScoreTarget  Int?     @default(80)
+  salesPerDeal         Decimal? @db.Decimal(12, 2)
+  motivationGrades     Json?
+  northStarTarget      Int?     @default(5)
+  periodStartDay       Int?     @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }

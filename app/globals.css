@@ -194,10 +194,19 @@
   .bg-white {
     background-color: var(--card);
   }
-  .text-gray-600, .text-gray-500, .text-gray-400 {
+  .bg-gray-50, .bg-gray-100, .bg-slate-50 {
+    background-color: var(--card);
+  }
+  .bg-gray-200, .bg-gray-300 {
+    background-color: var(--secondary);
+  }
+  .text-gray-900, .text-black {
+    color: var(--foreground);
+  }
+  .text-gray-700, .text-gray-600, .text-gray-500, .text-gray-400 {
     color: var(--muted-foreground);
   }
-  .border-gray-200, .border-gray-100 {
+  .border-gray-300, .border-gray-200, .border-gray-100 {
     border-color: var(--border);
   }
 }

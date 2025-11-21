@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { calculateMonthlyForecast } from '@/lib/calculations/forecast'
-import { MOTIVATION_GRADE_PRESETS } from '@/lib/config/motivationGrades'
 import { resolveCommissionRate } from '@/lib/motivation/motivationCalculator'
+import type { MotivationGradeConfig } from '@/lib/config/motivationGrades'
+import { RopSettingsService } from '@/lib/services/RopSettingsService'
 
 export class MotivationCalculatorService {
-  private getCommissionRate(turnover: number): number {
-    return resolveCommissionRate(turnover, MOTIVATION_GRADE_PRESETS.map((g) => ({
+  private getCommissionRate(turnover: number, grades: MotivationGradeConfig[]): number {
+    return resolveCommissionRate(turnover, grades.map((g) => ({
       minTurnover: g.minTurnover,
       maxTurnover: g.maxTurnover ?? null,
       commissionRate: g.commissionRate ?? (g as any).percent ?? 0,
@@ -13,6 +14,9 @@ export class MotivationCalculatorService {
   }
 
   async calculateIncomeForecast(userId: string) {
+    const settings = await RopSettingsService.getEffectiveSettings(userId)
+    const motivationGrades = settings.motivationGrades
+
     // 1. Get User & Goal
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -25,7 +29,7 @@ export class MotivationCalculatorService {
          sales: { current: 0, projected: 0, optimistic: 0, goal: 0, focusDealsAmount: 0 },
          rates: { current: 0.05, projected: 0.05, optimistic: 0.05 },
          income: { current: 0, projected: 0, optimistic: 0, projectedGrowth: 0, potentialGrowth: 0 },
-         grades: MOTIVATION_GRADE_PRESETS
+         grades: motivationGrades
        }
     }
     const monthlyGoal = Number(user.monthlyGoal || 0)
@@ -71,13 +75,13 @@ export class MotivationCalculatorService {
     // 4. Calculations
     
     // A. FACT
-    const currentRate = this.getCommissionRate(currentSales)
+    const currentRate = this.getCommissionRate(currentSales, motivationGrades)
     const currentCommission = currentSales * currentRate
 
     // B. FORECAST (Linear extrapolation)
     const forecastMetrics = calculateMonthlyForecast(currentSales, monthlyGoal)
     const projectedSales = forecastMetrics.projected
-    const projectedRate = this.getCommissionRate(projectedSales)
+    const projectedRate = this.getCommissionRate(projectedSales, motivationGrades)
     const projectedCommission = projectedSales * projectedRate
 
     // C. POTENTIAL (Forecast + Focus Deals)
@@ -86,7 +90,7 @@ export class MotivationCalculatorService {
     // Usually, "Focus" means "I will close these specific deals".
     // Let's add them to the projected total to show "Optimistic" scenario.
     const optimisticSales = projectedSales + potentialFocusAmount
-    const optimisticRate = this.getCommissionRate(optimisticSales)
+    const optimisticRate = this.getCommissionRate(optimisticSales, motivationGrades)
     const optimisticCommission = optimisticSales * optimisticRate
 
     return {
@@ -109,7 +113,7 @@ export class MotivationCalculatorService {
         projectedGrowth: projectedCommission - currentCommission,
         potentialGrowth: optimisticCommission - projectedCommission
       },
-      grades: MOTIVATION_GRADE_PRESETS.map((g) => ({ min: g.minTurnover, percent: g.commissionRate })),
+      grades: motivationGrades.map((g) => ({ min: g.minTurnover, percent: g.commissionRate })),
       deals: openDeals // Return the list for the UI
     }
   }

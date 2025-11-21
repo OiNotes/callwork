@@ -23,7 +23,7 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
 
   return (
     <motion.div
-      className="glass-card p-5 border border-slate-200 dark:border-slate-700 cursor-pointer h-[360px] flex flex-col"
+      className="glass-card p-5 border border-[var(--border)] cursor-pointer h-[360px] flex flex-col"
       whileHover={{ scale: 1.02, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
       onClick={() => router.push(`/dashboard/employee/${employeeId}`)}
       initial={{ opacity: 0, y: 20 }}
@@ -32,14 +32,14 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
     >
       {/* Header */}
       <div className="mb-4">
-        <h3 className="font-semibold text-lg text-slate-900 dark:text-white truncate">
+        <h3 className="font-semibold text-lg text-[var(--foreground)] truncate">
           {employeeName}
         </h3>
         <div className="flex items-baseline gap-2 mt-1">
           <span className="text-2xl font-bold" style={{ color: getConversionColor(finalConversion, false) }}>
             {formatPercent(finalConversion)}
           </span>
-          <span className="text-xs text-slate-500">финальная конверсия</span>
+          <span className="text-xs text-[var(--muted-foreground)]">финальная конверсия</span>
         </div>
       </div>
 
@@ -53,7 +53,7 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
             <div key={stage.stage} className="space-y-1">
               {/* Этап название + конверсия */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-600 dark:text-slate-400 truncate">
+                <span className="text-[var(--muted-foreground)] truncate">
                   {stage.stage.replace(' Проведено', '')}
                 </span>
                 <span className="font-semibold ml-2" style={{ color }}>
@@ -79,19 +79,19 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
       </div>
 
       {/* Footer - Red Zones */}
-      <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+      <div className="mt-4 pt-3 border-t border-[var(--border)]">
         {redZones.length > 0 ? (
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-red-600 dark:text-red-400 font-medium">Red Zones:</p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+              <p className="text-xs text-[var(--danger)] font-medium">Red Zones:</p>
+              <p className="text-xs text-[var(--muted-foreground)] truncate">
                 {redZones.join(', ')}
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <div className="flex items-center gap-2 text-[var(--success)]">
             <TrendingUp className="w-4 h-4" />
             <p className="text-xs font-medium">Все показатели в норме</p>
           </div>

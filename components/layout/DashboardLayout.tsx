@@ -3,11 +3,12 @@
 import { memo, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, TrendingUp, BarChart, Trophy, Bell, LayoutDashboard, ClipboardList } from 'lucide-react'
+import { LogOut, TrendingUp, BarChart, Trophy, Bell, LayoutDashboard, ClipboardList, Settings, User } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 import { AlertBadge } from '@/components/alerts/AlertBadge'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { motion } from 'framer-motion'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -95,27 +96,57 @@ export const DashboardLayout = memo(function DashboardLayout({ children }: Dashb
             {/* User Menu */}
             {session?.user && (
               <div className="flex items-center gap-4 pl-4 border-l border-[var(--border)]">
-                <div className="flex items-center gap-3 cursor-pointer group">
-                  <div className="hidden md:block text-right">
-                    <p className="text-sm font-medium text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
-                      {session.user.name}
-                    </p>
-                    <p className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wider mt-0.5">
-                      {session.user.role === 'MANAGER' ? 'Manager' : 'Employee'}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)] text-sm font-bold group-hover:border-[var(--primary)]/50 transition-colors">
-                    {session.user.name?.charAt(0).toUpperCase()}
-                  </div>
-                </div>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button className="flex items-center gap-3 cursor-pointer group outline-none">
+                      <div className="hidden md:block text-right">
+                        <p className="text-sm font-medium text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+                          {session.user.name}
+                        </p>
+                        <p className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wider mt-0.5">
+                          {session.user.role === 'MANAGER' ? 'Manager' : 'Employee'}
+                        </p>
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground)] text-sm font-bold group-hover:border-[var(--primary)]/50 transition-colors">
+                        {session.user.name?.charAt(0).toUpperCase()}
+                      </div>
+                    </button>
+                  </DropdownMenu.Trigger>
 
-                <button
-                  onClick={handleSignOut}
-                  className="w-10 h-10 rounded-full bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--muted-foreground)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] hover:border-[var(--danger)]/30 transition-all duration-300"
-                  title="Sign Out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content 
+                      className="min-w-[220px] bg-[var(--card)]/95 backdrop-blur-xl rounded-[16px] p-2 shadow-xl border border-[var(--border)] z-50 data-[side=bottom]:animate-slideUpAndFade data-[side=top]:animate-slideDownAndFade"
+                      sideOffset={8}
+                      align="end"
+                    >
+                      <DropdownMenu.Item className="group flex items-center px-3 py-2.5 text-sm text-[var(--foreground)] rounded-lg hover:bg-[var(--secondary)] outline-none cursor-pointer transition-colors" asChild>
+                        <Link href="/profile">
+                          <User className="w-4 h-4 mr-3 text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+                          Профиль
+                        </Link>
+                      </DropdownMenu.Item>
+                      
+                      {session.user.role === 'MANAGER' && (
+                        <DropdownMenu.Item className="group flex items-center px-3 py-2.5 text-sm text-[var(--foreground)] rounded-lg hover:bg-[var(--secondary)] outline-none cursor-pointer transition-colors" asChild>
+                          <Link href="/dashboard/settings/rop">
+                            <Settings className="w-4 h-4 mr-3 text-[var(--muted-foreground)] group-hover:text-[var(--primary)]" />
+                            Настройки РОПа
+                          </Link>
+                        </DropdownMenu.Item>
+                      )}
+
+                      <DropdownMenu.Separator className="h-[1px] bg-[var(--border)] my-2" />
+                      
+                      <DropdownMenu.Item 
+                        className="group flex items-center px-3 py-2.5 text-sm text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/10 outline-none cursor-pointer transition-colors"
+                        onSelect={handleSignOut}
+                      >
+                        <LogOut className="w-4 h-4 mr-3" />
+                        Выход
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
               </div>
             )}
           </div>

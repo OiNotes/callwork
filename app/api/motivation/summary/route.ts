@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/get-session'
 import { getMotivationSummaryForManagers } from '@/lib/motivation/motivationService'
 import { resolveAccessibleManagerIds } from '@/lib/motivation/scope'
+import { getSettingsForUser } from '@/lib/settings/context'
 
-function getPeriod(searchParams: URLSearchParams) {
+function getPeriod(searchParams: URLSearchParams, customStartDay?: number) {
   const preset = searchParams.get('preset')
   const startParam = searchParams.get('startDate')
   const endParam = searchParams.get('endDate')
@@ -21,7 +22,14 @@ function getPeriod(searchParams: URLSearchParams) {
     startDate.setDate(startDate.getDate() - 7)
   } else {
     endDate = now
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startDay =
+      typeof customStartDay === 'number' && customStartDay > 0 && customStartDay <= 31
+        ? customStartDay
+        : 1
+    startDate = new Date(now.getFullYear(), now.getMonth(), startDay)
+    if (startDay > now.getDate()) {
+      startDate.setMonth(startDate.getMonth() - 1)
+    }
   }
 
   return { startDate, endDate }
@@ -32,10 +40,15 @@ export async function GET(request: Request) {
     const user = await requireAuth()
     const { searchParams } = new URL(request.url)
     const managerId = searchParams.get('managerId')
+    const { settings } = await getSettingsForUser(user.id, user.role)
 
-    const period = getPeriod(searchParams)
+    const period = getPeriod(searchParams, settings.periodStartDay)
     const managerIds = await resolveAccessibleManagerIds(user, managerId)
-    const { summary, grades } = await getMotivationSummaryForManagers(managerIds, period)
+    const { summary, grades } = await getMotivationSummaryForManagers(
+      managerIds,
+      period,
+      settings.motivation.grades
+    )
 
     return NextResponse.json({
       factTurnover: summary.factTurnover,

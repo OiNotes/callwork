@@ -31,20 +31,24 @@ async function loadGrades(): Promise<MotivationGradeConfig[]> {
 
 export async function getMotivationSummaryForManagers(
   managerIds: string[],
-  period: MotivationPeriod
+  period: MotivationPeriod,
+  gradesOverride?: MotivationGradeConfig[]
 ): Promise<MotivationSummaryPayload> {
   if (managerIds.length === 0) {
     return {
-      grades: MOTIVATION_GRADE_PRESETS,
+      grades: gradesOverride && gradesOverride.length > 0 ? gradesOverride : MOTIVATION_GRADE_PRESETS,
       summary: calculateMotivation({
         factTurnover: 0,
         hotTurnover: 0,
-        grades: MOTIVATION_GRADE_PRESETS,
+        grades: gradesOverride && gradesOverride.length > 0 ? gradesOverride : MOTIVATION_GRADE_PRESETS,
       }),
     }
   }
 
-  const grades = await loadGrades()
+  const grades =
+    gradesOverride && gradesOverride.length > 0
+      ? gradesOverride
+      : await loadGrades()
 
   const [factAgg, hotAgg] = await Promise.all([
     prisma.deal.aggregate({

@@ -1,6 +1,11 @@
 import { Report } from '@prisma/client'
 import { CONVERSION_BENCHMARKS, FUNNEL_STAGES, KPI_BENCHMARKS, PLAN_HEURISTICS } from '@/lib/config/metrics'
-import { computeConversions, stageBenchmarkById } from '@/lib/calculations/metrics'
+import {
+  computeConversions,
+  stageBenchmarkByIdWithOverrides,
+  type ConversionBenchmarkConfig,
+} from '@/lib/calculations/metrics'
+import type { AlertThresholdConfig } from '@/lib/services/RopSettingsService'
 
 export interface FunnelStage {
   id: string
@@ -54,6 +59,11 @@ export const BENCHMARKS = {
   activityScore: KPI_BENCHMARKS.ACTIVITY_SCORE,
 }
 
+const DEFAULT_ALERT_THRESHOLDS: AlertThresholdConfig = {
+  warning: 0.9,
+  critical: 0.7,
+}
+
 export function getHeatmapColor(value: number, benchmark: number): string {
   if (value === 0) return 'bg-white text-gray-400'
   const ratio = value / benchmark
@@ -71,8 +81,11 @@ export function getHeatmapColor(value: number, benchmark: number): string {
 export function calculateManagerStatsClient(
   reports: Report[],
   planSales: number = 0,
-  planDeals: number = 0
+  planDeals: number = 0,
+  options?: { salesPerDeal?: number }
 ): Omit<ManagerStats, 'id' | 'name'> {
+  const salesPerDeal = options?.salesPerDeal ?? PLAN_HEURISTICS.SALES_PER_DEAL
+
   const totals = reports.reduce(
     (acc, report) => {
       const pushCount = (report as any).pushCount ?? report.contractReviewCount ?? 0
@@ -132,13 +145,21 @@ export function calculateManagerStatsClient(
     northStar,
     totalConversion,
     planSales,
-    planDeals: planDeals || Math.max(1, Math.round(planSales / PLAN_HEURISTICS.SALES_PER_DEAL)),
+    planDeals: planDeals || Math.max(1, Math.round(planSales / salesPerDeal)),
     activityScore,
     trend,
   }
 }
 
-export function getFunnelData(stats: Omit<ManagerStats, 'id' | 'name'>): FunnelStage[] {
+export function getFunnelData(
+  stats: Omit<ManagerStats, 'id' | 'name'>,
+  benchmarks?: Partial<ConversionBenchmarkConfig>
+): FunnelStage[] {
+  const mergedBenchmarks: ConversionBenchmarkConfig = {
+    ...CONVERSION_BENCHMARKS,
+    ...(benchmarks ?? {}),
+  }
+
   const stageMap = {
     zoomBooked: stats.zoomBooked,
     zoom1Held: stats.zoom1Held,
@@ -160,7 +181,7 @@ export function getFunnelData(stats: Omit<ManagerStats, 'id' | 'name'>): FunnelS
     const prevStage = FUNNEL_STAGES[index - 1]
     const prevValue = prevStage ? stageMap[prevStage.id as keyof typeof stageMap] : undefined
     const conversion = conversionMap[stage.id] ?? 100
-    const benchmark = stageBenchmarkById(stage.id as any)
+    const benchmark = stageBenchmarkByIdWithOverrides(stage.id as any, mergedBenchmarks)
 
     return {
       id: stage.id,
@@ -176,64 +197,94 @@ export function getFunnelData(stats: Omit<ManagerStats, 'id' | 'name'>): FunnelS
 }
 
 export function analyzeRedZones(stats: ManagerStats) {
+  return analyzeRedZonesWithBenchmarks(stats, undefined, undefined)
+}
+
+export function analyzeRedZonesWithBenchmarks(
+  stats: ManagerStats,
+  benchmarks?: Partial<ConversionBenchmarkConfig>,
+  alertThresholds: Partial<AlertThresholdConfig> = {},
+  activityTarget: number = KPI_BENCHMARKS.ACTIVITY_SCORE,
+  northStarTarget: number = KPI_BENCHMARKS.NORTH_STAR
+) {
   const issues = []
 
-  if (stats.bookedToZoom1 < BENCHMARKS.bookedToZoom1) {
+  const mergedBenchmarks: ConversionBenchmarkConfig = {
+    ...CONVERSION_BENCHMARKS,
+    ...(benchmarks ?? {}),
+  }
+
+  const thresholds: AlertThresholdConfig = {
+    ...DEFAULT_ALERT_THRESHOLDS,
+    ...alertThresholds,
+  }
+
+  const classify = (value: number, target: number) => {
+    if (value < target * thresholds.critical) return 'critical'
+    if (value < target * thresholds.warning) return 'warning'
+    return null
+  }
+
+  const bookedSeverity = classify(stats.bookedToZoom1, mergedBenchmarks.BOOKED_TO_ZOOM1)
+  if (bookedSeverity) {
     issues.push({
       stage: 'Записи → 1-й Zoom',
       metric: 'Конверсия в явку',
       value: stats.bookedToZoom1,
-      benchmark: BENCHMARKS.bookedToZoom1,
-      severity: 'warning',
+      benchmark: mergedBenchmarks.BOOKED_TO_ZOOM1,
+      severity: bookedSeverity,
     })
   }
 
-  if (stats.zoom1ToZoom2 < BENCHMARKS.zoom1ToZoom2) {
+  const zoom1Severity = classify(stats.zoom1ToZoom2, mergedBenchmarks.ZOOM1_TO_ZOOM2)
+  if (zoom1Severity) {
     issues.push({
       stage: '1-й Zoom → 2-й Zoom',
       metric: 'Квалификация лида',
       value: stats.zoom1ToZoom2,
-      benchmark: BENCHMARKS.zoom1ToZoom2,
-      severity: 'critical',
+      benchmark: mergedBenchmarks.ZOOM1_TO_ZOOM2,
+      severity: zoom1Severity,
     })
   }
 
-  if (stats.contractToPush < BENCHMARKS.contractToPush) {
+  const contractSeverity = classify(stats.contractToPush, mergedBenchmarks.CONTRACT_TO_PUSH)
+  if (contractSeverity) {
     issues.push({
       stage: 'Договор → Дожим',
       metric: 'Дожим клиентов',
       value: stats.contractToPush,
-      benchmark: BENCHMARKS.contractToPush,
-      severity: 'warning',
+      benchmark: mergedBenchmarks.CONTRACT_TO_PUSH,
+      severity: contractSeverity,
     })
   }
 
-  if (stats.pushToDeal < BENCHMARKS.pushToDeal) {
+  const pushSeverity = classify(stats.pushToDeal, mergedBenchmarks.PUSH_TO_DEAL)
+  if (pushSeverity) {
     issues.push({
       stage: 'Дожим → Оплата',
       metric: 'Закрытие',
       value: stats.pushToDeal,
-      benchmark: BENCHMARKS.pushToDeal,
-      severity: 'critical',
+      benchmark: mergedBenchmarks.PUSH_TO_DEAL,
+      severity: pushSeverity,
     })
   }
 
-  if (stats.activityScore < BENCHMARKS.activityScore) {
+  if (stats.activityScore < activityTarget) {
     issues.push({
       stage: 'Активность',
       metric: 'Индекс активности',
       value: stats.activityScore,
-      benchmark: BENCHMARKS.activityScore,
+      benchmark: activityTarget,
       severity: 'warning',
     })
   }
 
-  if (stats.northStar < BENCHMARKS.northStar) {
+  if (stats.northStar < northStarTarget) {
     issues.push({
       stage: '1-й Zoom → Оплата',
       metric: 'North Star KPI',
       value: stats.northStar,
-      benchmark: BENCHMARKS.northStar,
+      benchmark: northStarTarget,
       severity: 'critical',
     })
   }

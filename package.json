@@ -12,7 +12,10 @@
     "bot:dev": "tsx bot/index.ts",
     "bot:start": "node --loader ts-node/esm bot/index.ts",
     "seed:tv": "npx tsx scripts/seed-tv-today.ts",
-    "test:analytics": "tsx tests/analytics.test.ts"
+    "seed:employees": "tsx scripts/seed-test-employees.ts",
+    "test:analytics": "tsx tests/analytics.test.ts",
+    "db:create-manager": "tsx scripts/create-manager.ts",
+    "db:nuke": "tsx scripts/nuke-database.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

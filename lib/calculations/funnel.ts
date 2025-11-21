@@ -1,5 +1,10 @@
 import { FUNNEL_STAGES, FunnelStageId } from '@/lib/config/conversionBenchmarks'
-import { computeConversions, getStageLabel as getLabelFromConfig, resolveNorthStarStatus } from '@/lib/calculations/metrics'
+import {
+  computeConversions,
+  getStageLabel as getLabelFromConfig,
+  resolveNorthStarStatus,
+  type ConversionBenchmarkConfig,
+} from '@/lib/calculations/metrics'
 
 const round2 = (num: number) => Math.round(num * 100) / 100
 const getStageLabel = (id: FunnelStageId) => getLabelFromConfig(id)
@@ -58,15 +63,21 @@ export interface FullFunnelResult {
   northStarKpi: NorthStarKpi
 }
 
-export function calculateFullFunnel(totals: FunnelTotals): FullFunnelResult {
-  const { stages, northStar } = computeConversions({
-    zoomBooked: totals.zoomBooked,
-    zoom1Held: totals.zoom1Held,
-    zoom2Held: totals.zoom2Held,
-    contractReview: totals.contractReview,
-    push: totals.push,
-    deals: totals.deals,
-  })
+export function calculateFullFunnel(
+  totals: FunnelTotals,
+  options?: { benchmarks?: Partial<ConversionBenchmarkConfig>; northStarTarget?: number }
+): FullFunnelResult {
+  const { stages, northStar } = computeConversions(
+    {
+      zoomBooked: totals.zoomBooked,
+      zoom1Held: totals.zoom1Held,
+      zoom2Held: totals.zoom2Held,
+      contractReview: totals.contractReview,
+      push: totals.push,
+      deals: totals.deals,
+    },
+    { benchmarks: options?.benchmarks }
+  )
   const values: Record<FunnelStageId, number> = {
     zoomBooked: totals.zoomBooked || 0,
     zoom1Held: totals.zoom1Held || 0,
@@ -87,7 +98,7 @@ export function calculateFullFunnel(totals: FunnelTotals): FullFunnelResult {
 
   const northStarKpi: NorthStarKpi = {
     value: northStar,
-    ...resolveNorthStarStatus(northStar),
+    ...resolveNorthStarStatus(northStar, options?.northStarTarget),
   }
 
   // Отказы по этапам (fallback: считаем все после 1-го Zoom)

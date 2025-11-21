@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, DollarSign, TrendingUp, Target } from 'lucide-react'
 import { FunnelChart } from '@/components/analytics/FunnelChart'
 import { RedZoneAlerts } from '@/components/analytics/RedZoneAlerts'
-import { calculateManagerStatsClient, getFunnelData, analyzeRedZones, BENCHMARKS } from '@/lib/analytics/funnel.client'
 import { formatMoney } from '@/lib/utils/format'
+import type { SettingsShape } from '@/lib/settings/getSettings'
 
 interface EmployeePageProps {
   params: Promise<{ id: string }>
@@ -18,48 +18,22 @@ export default function EmployeePage({ params }: EmployeePageProps) {
   const employeeId = resolvedParams.id
 
   const [range, setRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month')
-  const [stats, setStats] = useState<any>(null)
-  const [employee, setEmployee] = useState<any>(null)
+  const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [funnelData, setFunnelData] = useState<any[]>([])
-  const [alerts, setAlerts] = useState<any[]>([])
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
-
-        // Fetch employee reports
-        const reportsRes = await fetch(`/api/employees/${employeeId}/reports?limit=100`) // Fetch enough data
-        const reportsData = await reportsRes.json()
-        const reports = reportsData.reports || []
-
-        // Fetch employee info
-        const employeesRes = await fetch(`/api/employees`)
-        const employeesData = await employeesRes.json()
-        const emp = employeesData.employees?.find((e: any) => e.id === employeeId)
-        setEmployee(emp)
-
-        // Calculate Stats (client-side without DB access)
-        const calculatedStats = calculateManagerStatsClient(reports)
-        setStats(calculatedStats)
-
-        // Calculate Funnel
-        const funnel = getFunnelData(calculatedStats)
-        setFunnelData(funnel)
-
-        // Generate Alerts
-        const issues = analyzeRedZones({ ...calculatedStats, id: employeeId, name: emp?.name || '' })
-        const newAlerts = issues.map(issue => ({
-          id: `${employeeId}-${issue.stage}`,
-          type: issue.severity,
-          title: `Проблема на этапе ${issue.stage}`,
-          description: `${issue.metric} составляет ${issue.value}% (Норма: ${issue.benchmark}%)`,
-        }))
-        setAlerts(newAlerts)
-
+        const res = await fetch(`/api/employees/${employeeId}/stats?range=${range}`)
+        const json = await res.json()
+        if (!res.ok) {
+          throw new Error(json.error || 'Не удалось загрузить данные сотрудника')
+        }
+        setData(json)
       } catch (error) {
         console.error('Error fetching employee data:', error)
+        setData(null)
       } finally {
         setLoading(false)
       }
@@ -76,7 +50,7 @@ export default function EmployeePage({ params }: EmployeePageProps) {
     )
   }
 
-  if (!stats || !employee) {
+  if (!data?.stats || !data?.employee) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -91,6 +65,49 @@ export default function EmployeePage({ params }: EmployeePageProps) {
       </div>
     )
   }
+
+  const employee = data.employee
+  const stats = data.stats
+  const settings: SettingsShape | undefined = data.settings
+  const benchmarks = settings?.conversionBenchmarks
+  const alertThresholds = settings?.alertThresholds ?? { warning: 0.9, critical: 0.7 }
+  const norm = {
+    bookedToZoom1: benchmarks?.BOOKED_TO_ZOOM1 ?? 0,
+    zoom1ToZoom2: benchmarks?.ZOOM1_TO_ZOOM2 ?? 0,
+    zoom2ToContract: benchmarks?.ZOOM2_TO_CONTRACT ?? 0,
+    contractToPush: benchmarks?.CONTRACT_TO_PUSH ?? 0,
+    pushToDeal: benchmarks?.PUSH_TO_DEAL ?? 0,
+  }
+  const funnelData = (data.funnel || []).map((stage: any) => ({
+    ...stage,
+    label: stage.stage,
+  }))
+
+  const severity = (value: number, target: number) => {
+    if (target === 0) return 'info'
+    if (value < target * alertThresholds.critical) return 'critical'
+    if (value < target * alertThresholds.warning) return 'warning'
+    return 'info'
+  }
+
+  const alerts = (data.redZones || []).map((issue: any, idx: number) => {
+    const target =
+      issue.metric === 'Запись → 1-й Zoom'
+        ? norm.bookedToZoom1
+        : issue.metric === '1-й → 2-й Zoom'
+        ? norm.zoom1ToZoom2
+        : issue.metric === 'Дожим → Оплата'
+        ? norm.pushToDeal
+        : settings?.northStarTarget ?? 0
+
+    return {
+      id: `${issue.metric}-${idx}`,
+      type: severity(issue.current, target) as 'critical' | 'warning' | 'info',
+      title: issue.metric,
+      description: `Текущее значение ${issue.current}% (норма ${target || '—'}%)`,
+      managerName: employee.name,
+    }
+  })
 
   const getInitials = (name: string) => {
     const parts = name.split(' ')
@@ -194,31 +211,31 @@ export default function EmployeePage({ params }: EmployeePageProps) {
               <div className="space-y-4">
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Запись → 1-й Zoom</span>
-                  <span className={`font-mono font-bold ${stats.bookedToZoom1 < BENCHMARKS.bookedToZoom1 ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.bookedToZoom1 < norm.bookedToZoom1 ? 'text-red-500' : 'text-green-600'}`}>
                     {stats.bookedToZoom1}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">1-й → 2-й Zoom</span>
-                  <span className={`font-mono font-bold ${stats.zoom1ToZoom2 < BENCHMARKS.zoom1ToZoom2 ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.zoom1ToZoom2 < norm.zoom1ToZoom2 ? 'text-red-500' : 'text-green-600'}`}>
                     {stats.zoom1ToZoom2}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">2-й Zoom → Договор</span>
-                  <span className={`font-mono font-bold ${stats.zoom2ToContract < BENCHMARKS.zoom2ToContract ? 'text-orange-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.zoom2ToContract < norm.zoom2ToContract ? 'text-orange-500' : 'text-green-600'}`}>
                     {stats.zoom2ToContract}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Договор → Дожим</span>
-                  <span className={`font-mono font-bold ${stats.contractToPush < BENCHMARKS.contractToPush ? 'text-orange-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.contractToPush < norm.contractToPush ? 'text-orange-500' : 'text-green-600'}`}>
                     {stats.contractToPush}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Дожим → Оплата</span>
-                  <span className={`font-mono font-bold ${stats.pushToDeal < BENCHMARKS.pushToDeal ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.pushToDeal < norm.pushToDeal ? 'text-red-500' : 'text-green-600'}`}>
                     {stats.pushToDeal}%
                   </span>
                 </div>

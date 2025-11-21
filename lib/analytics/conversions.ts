@@ -1,4 +1,4 @@
-import { computeConversions } from '@/lib/calculations/metrics'
+import { computeConversions, type ConversionBenchmarkConfig } from '@/lib/calculations/metrics'
 
 export interface Stats {
   zoomBooked: number
@@ -20,7 +20,10 @@ export interface Conversions {
   northStar: number
 }
 
-export function calculateConversions(stats: Stats): Conversions {
+export function calculateConversions(
+  stats: Stats,
+  benchmarks?: Partial<ConversionBenchmarkConfig>
+): Conversions {
   const { stages, northStar, totalConversion } = computeConversions({
     zoomBooked: stats.zoomBooked,
     zoom1Held: stats.zoom1Held,
@@ -28,7 +31,7 @@ export function calculateConversions(stats: Stats): Conversions {
     contractReview: stats.contractReview,
     push: stats.pushCount,
     deals: stats.successfulDeals,
-  })
+  }, { benchmarks })
 
   const conversionsMap = Object.fromEntries(
     stages.map((stage) => [stage.id, stage.conversion])

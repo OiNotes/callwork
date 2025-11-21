@@ -10,13 +10,18 @@ import { RedZoneAlerts } from '@/components/analytics/RedZoneAlerts'
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrendChart'
 import { MotivationWidget } from '@/components/dashboard/MotivationWidget'
 import { DealsList, DealCard } from '@/components/deals/DealsList'
-import { getFunnelData, ManagerStats, analyzeRedZones } from '@/lib/analytics/funnel.client'
+import {
+  getFunnelData,
+  ManagerStats,
+  analyzeRedZonesWithBenchmarks,
+} from '@/lib/analytics/funnel.client'
 import { calculateFullFunnel, NorthStarKpi } from '@/lib/calculations/funnel'
 import { PeriodSelector, PeriodPreset } from '@/components/filters/PeriodSelector'
 import { ManagerSelector } from '@/components/filters/ManagerSelector'
 import { RightPanelControls } from '@/components/dashboard/RightPanelControls'
 import { MotivationCalculationResult } from '@/lib/motivation/motivationCalculator'
 import { MotivationGradeConfig } from '@/lib/config/motivationGrades'
+import type { SettingsShape } from '@/lib/settings/getSettings'
 
 interface User {
   id: string
@@ -70,6 +75,7 @@ export function DashboardContent({ user }: DashboardContentProps) {
   })
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
   const headerRef = useRef<HTMLDivElement>(null)
+  const [settings, setSettings] = useState<SettingsShape | null>(null)
 
   const handleDatePresetChange = (preset: PeriodPreset, nextRange?: { start: Date; end: Date }) => {
     setDatePreset(preset)
@@ -78,7 +84,7 @@ export function DashboardContent({ user }: DashboardContentProps) {
     }
   }
 
-  const recomputeViews = useCallback((employeesList: any[], managerFilter = selectedManagerId, serverTeamStats: any = null) => {
+  const recomputeViews = useCallback((employeesList: any[], managerFilter = selectedManagerId, serverTeamStats: any = null, currentSettings: any = null) => {
     const filteredEmployees =
       managerFilter === 'all'
         ? employeesList
@@ -151,19 +157,25 @@ export function DashboardContent({ user }: DashboardContentProps) {
     }
 
     setTeamStats(tStats)
-    setTeamFunnel(getFunnelData(tStats))
+    setTeamFunnel(getFunnelData(tStats, currentSettings?.conversionBenchmarks))
 
-    const { northStarKpi: teamNorthStar } = calculateFullFunnel({
-      zoomBooked: tStats.zoomBooked,
-      zoom1Held: tStats.zoom1Held,
-      zoom2Held: tStats.zoom2Held,
-      contractReview: tStats.contractReview,
-      push: tStats.pushCount,
-      deals: tStats.successfulDeals,
-      sales: tStats.salesAmount,
-      refusals: tStats.refusals,
-      warming: tStats.warming,
-    })
+    const { northStarKpi: teamNorthStar } = calculateFullFunnel(
+      {
+        zoomBooked: tStats.zoomBooked,
+        zoom1Held: tStats.zoom1Held,
+        zoom2Held: tStats.zoom2Held,
+        contractReview: tStats.contractReview,
+        push: tStats.pushCount,
+        deals: tStats.successfulDeals,
+        sales: tStats.salesAmount,
+        refusals: tStats.refusals,
+        warming: tStats.warming,
+      },
+      {
+        benchmarks: currentSettings?.conversionBenchmarks,
+        northStarTarget: currentSettings?.northStarTarget,
+      }
+    )
     setNorthStarKpi(teamNorthStar)
 
     const dailyMap = new Map<string, { date: string; sales: number; deals: number }>()
@@ -187,7 +199,13 @@ export function DashboardContent({ user }: DashboardContentProps) {
 
     const newAlerts: any[] = []
     processedStats.forEach((stat: ManagerStats) => {
-      const issues = analyzeRedZones(stat)
+        const issues = analyzeRedZonesWithBenchmarks(
+          stat,
+          currentSettings?.conversionBenchmarks,
+          currentSettings?.alertThresholds,
+          currentSettings?.activityTarget,
+          currentSettings?.northStarTarget
+        )
       issues.forEach((issue) => {
         newAlerts.push({
           id: `${stat.id}-${issue.stage}`,
@@ -225,10 +243,11 @@ export function DashboardContent({ user }: DashboardContentProps) {
         const data = await response.json()
         const employeesList = data.employees || []
         const tStats = data.teamStats || null
-        
+        setSettings(data.settings || null)
+
         setRawEmployees(employeesList)
         setServerTeamStats(tStats)
-        recomputeViews(employeesList, selectedManagerId, tStats)
+        recomputeViews(employeesList, selectedManagerId, tStats, data.settings || null)
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -237,13 +256,13 @@ export function DashboardContent({ user }: DashboardContentProps) {
     }
 
     fetchData()
-  }, [user.role, dateRange.start, dateRange.end, selectedManagerId, recomputeViews]) 
+  }, [user.role, dateRange.start, dateRange.end, selectedManagerId, recomputeViews])
 
   // Update recompute effect to use the stored server stats
   useEffect(() => {
     if (rawEmployees.length === 0) return
-    recomputeViews(rawEmployees, selectedManagerId, serverTeamStats)
-  }, [selectedManagerId, rawEmployees, serverTeamStats, recomputeViews])
+    recomputeViews(rawEmployees, selectedManagerId, serverTeamStats, settings)
+  }, [selectedManagerId, rawEmployees, serverTeamStats, recomputeViews, settings])
 
   useEffect(() => {
     if (user.role !== 'MANAGER') return
@@ -329,8 +348,8 @@ export function DashboardContent({ user }: DashboardContentProps) {
 
   useEffect(() => {
     if (rawEmployees.length === 0) return
-    recomputeViews(rawEmployees, selectedManagerId)
-  }, [selectedManagerId, rawEmployees, recomputeViews])
+    recomputeViews(rawEmployees, selectedManagerId, serverTeamStats, settings)
+  }, [selectedManagerId, rawEmployees, recomputeViews, serverTeamStats, settings])
 
   useEffect(() => {
     if (user.role !== 'MANAGER') {
@@ -530,7 +549,11 @@ export function DashboardContent({ user }: DashboardContentProps) {
         <div className="lg:col-span-2 space-y-8">
           <motion.div variants={item} className="glass-card p-8">
             <h2 className="text-xl font-bold text-[var(--foreground)] mb-6">Эффективность менеджеров</h2>
-            <ManagersTable managers={managerStats} />
+            <ManagersTable
+              managers={managerStats}
+              benchmarks={settings?.conversionBenchmarks}
+              activityTarget={settings?.activityTarget}
+            />
           </motion.div>
         </div>
       </div>

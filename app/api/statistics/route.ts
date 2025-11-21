@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { calculateFullFunnel } from '@/lib/calculations/funnel'
+import { getSettingsForUser } from '@/lib/settings/context'
 
 export async function GET(req: Request) {
   try {
@@ -27,6 +28,8 @@ export async function GET(req: Request) {
         },
       }),
     }
+
+    const { settings } = await getSettingsForUser(user.id, user.role)
 
     const stats = await prisma.report.aggregate({
       where: whereClause,
@@ -59,7 +62,10 @@ export async function GET(req: Request) {
       warming: stats._sum.warmingUpCount || 0,
     }
 
-    const fullFunnel = calculateFullFunnel(totals)
+    const fullFunnel = calculateFullFunnel(totals, {
+      benchmarks: settings.conversionBenchmarks,
+      northStarTarget: settings.northStarTarget,
+    })
 
     const conversions = fullFunnel.funnel
       .filter((stage) => stage.id !== 'zoomBooked')

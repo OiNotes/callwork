@@ -18,8 +18,10 @@ interface PulseGridProps {
 }
 
 export function PulseGrid({ stats, northStarKpi }: PulseGridProps) {
-  const salesProgress = Math.min(100, (stats.salesAmount / stats.planSales) * 100)
-  const dealsProgress = Math.min(100, (stats.successfulDeals / stats.planDeals) * 100)
+  const salesProgress =
+    stats.planSales > 0 ? Math.min(100, (stats.salesAmount / stats.planSales) * 100) : 0
+  const dealsProgress =
+    stats.planDeals > 0 ? Math.min(100, (stats.successfulDeals / stats.planDeals) * 100) : 0
 
   const conversionDiff = stats.totalConversion - stats.prevConversion
   const isConversionUp = conversionDiff >= 0

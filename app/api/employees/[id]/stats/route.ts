@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth/get-session'
 import { calculateManagerStats } from '@/lib/analytics/funnel'
 import { calculateFullFunnel } from '@/lib/calculations/funnel'
-import { CONVERSION_BENCHMARKS } from '@/lib/config/conversionBenchmarks'
 import { getDateRange } from '@/lib/analytics/conversions'
+import { getSettingsForUser } from '@/lib/settings/context'
 
 export async function GET(
   request: Request,
@@ -33,10 +33,12 @@ export async function GET(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
-    
+
     const { searchParams } = new URL(request.url)
     const range = (searchParams.get('range') as 'week' | 'month' | 'quarter' | 'year') || 'month'
     const { startDate, endDate } = getDateRange(range)
+    const { settings } = await getSettingsForUser(user.id, user.role)
+    const benchmarks = settings.conversionBenchmarks
 
     const employee = await prisma.user.findUnique({
       where: { id: employeeId },
@@ -54,7 +56,10 @@ export async function GET(
       },
     })
 
-    const employeeStats = await calculateManagerStats(employeeReports, employeeId)
+    const employeeStats = await calculateManagerStats(employeeReports, employeeId, {
+      salesPerDeal: settings.salesPerDeal,
+      planMode: 'user',
+    })
 
     const teamMembers = await prisma.user.findMany({
       where: {
@@ -72,7 +77,10 @@ export async function GET(
 
     const teamReports = teamMembers.flatMap((member) => member.reports)
     // Для команды используем managerId, чтобы получить суммарную цель команды для среднего
-    const teamTotals = await calculateManagerStats(teamReports, employee.managerId!)
+    const teamOwnerId = employee.managerId ?? user.id
+    const teamTotals = await calculateManagerStats(teamReports, teamOwnerId, {
+      salesPerDeal: settings.salesPerDeal,
+    })
     const teamCount = teamMembers.length || 1
 
     const teamAverageCounts = {
@@ -87,7 +95,7 @@ export async function GET(
 
     const redZones = []
 
-    if (employeeStats.bookedToZoom1 < CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1) {
+    if (employeeStats.bookedToZoom1 < benchmarks.BOOKED_TO_ZOOM1) {
       redZones.push({
         metric: 'Запись → 1-й Zoom',
         current: employeeStats.bookedToZoom1,
@@ -97,7 +105,7 @@ export async function GET(
       })
     }
 
-    if (employeeStats.zoom1ToZoom2 < CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2) {
+    if (employeeStats.zoom1ToZoom2 < benchmarks.ZOOM1_TO_ZOOM2) {
       redZones.push({
         metric: '1-й → 2-й Zoom',
         current: employeeStats.zoom1ToZoom2,
@@ -107,7 +115,7 @@ export async function GET(
       })
     }
 
-    if (employeeStats.pushToDeal < CONVERSION_BENCHMARKS.PUSH_TO_DEAL) {
+    if (employeeStats.pushToDeal < benchmarks.PUSH_TO_DEAL) {
       redZones.push({
         metric: 'Дожим → Оплата',
         current: employeeStats.pushToDeal,
@@ -117,7 +125,7 @@ export async function GET(
       })
     }
 
-    if (employeeStats.northStar < CONVERSION_BENCHMARKS.ZOOM1_TO_DEAL_KPI) {
+    if (employeeStats.northStar < settings.northStarTarget) {
       redZones.push({
         metric: 'Главный KPI',
         current: employeeStats.northStar,
@@ -127,17 +135,23 @@ export async function GET(
       })
     }
 
-    const employeeFunnel = calculateFullFunnel({
-      zoomBooked: employeeStats.zoomBooked,
-      zoom1Held: employeeStats.zoom1Held,
-      zoom2Held: employeeStats.zoom2Held,
-      contractReview: employeeStats.contractReview,
-      push: employeeStats.pushCount,
-      deals: employeeStats.successfulDeals,
-      sales: employeeStats.salesAmount,
-      refusals: employeeStats.refusals,
-      warming: employeeStats.warming,
-    })
+    const employeeFunnel = calculateFullFunnel(
+      {
+        zoomBooked: employeeStats.zoomBooked,
+        zoom1Held: employeeStats.zoom1Held,
+        zoom2Held: employeeStats.zoom2Held,
+        contractReview: employeeStats.contractReview,
+        push: employeeStats.pushCount,
+        deals: employeeStats.successfulDeals,
+        sales: employeeStats.salesAmount,
+        refusals: employeeStats.refusals,
+        warming: employeeStats.warming,
+      },
+      {
+        benchmarks,
+        northStarTarget: settings.northStarTarget,
+      }
+    )
 
     return NextResponse.json({
       employee: {
@@ -174,6 +188,7 @@ export async function GET(
         start: startDate.toISOString(),
         end: endDate.toISOString(),
       },
+      settings,
     })
   } catch (error) {
     console.error('GET /api/employees/[id]/stats error:', error)

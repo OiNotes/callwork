@@ -9,6 +9,7 @@ export interface RedZone {
 }
 
 import { CONVERSION_BENCHMARKS } from '@/lib/config/metrics'
+import type { ConversionBenchmarkConfig } from '@/lib/calculations/metrics'
 
 const REDZONE_TOLERANCE = 10 // % допустимое отклонение до критического статуса
 
@@ -23,13 +24,23 @@ interface ConversionsWithTeam {
   }
 }
 
-export function analyzeRedZones(conversions: ConversionsWithTeam): RedZone[] {
+export function analyzeRedZones(
+  conversions: ConversionsWithTeam,
+  benchmarks?: Partial<ConversionBenchmarkConfig>
+): RedZone[] {
+  const mergedBenchmarks: ConversionBenchmarkConfig = {
+    ...CONVERSION_BENCHMARKS,
+    ...(benchmarks ?? {}),
+  }
   const zones: RedZone[] = []
   const { teamAverage } = conversions
   
-  if (conversions.bookedToZoom1 < CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1) {
+  if (conversions.bookedToZoom1 < mergedBenchmarks.BOOKED_TO_ZOOM1) {
     zones.push({
-      severity: conversions.bookedToZoom1 < CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1 - REDZONE_TOLERANCE ? 'critical' : 'warning',
+      severity:
+        conversions.bookedToZoom1 < mergedBenchmarks.BOOKED_TO_ZOOM1 - REDZONE_TOLERANCE
+          ? 'critical'
+          : 'warning',
       stage: 'zoom1',
       title: 'Низкая явка на 1-й Zoom',
       description: 'Много записанных клиентов не доходят до первой встречи',
@@ -39,9 +50,12 @@ export function analyzeRedZones(conversions: ConversionsWithTeam): RedZone[] {
     })
   }
   
-  if (conversions.zoom1ToZoom2 < CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2) {
+  if (conversions.zoom1ToZoom2 < mergedBenchmarks.ZOOM1_TO_ZOOM2) {
     zones.push({
-      severity: conversions.zoom1ToZoom2 < CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2 - REDZONE_TOLERANCE ? 'critical' : 'warning',
+      severity:
+        conversions.zoom1ToZoom2 < mergedBenchmarks.ZOOM1_TO_ZOOM2 - REDZONE_TOLERANCE
+          ? 'critical'
+          : 'warning',
       stage: 'zoom2',
       title: 'Мало переходов 1-й → 2-й Zoom',
       description: 'Клиенты не переходят на вторичную встречу после первой',
@@ -51,9 +65,12 @@ export function analyzeRedZones(conversions: ConversionsWithTeam): RedZone[] {
     })
   }
   
-  if (conversions.pushToDeal < CONVERSION_BENCHMARKS.PUSH_TO_DEAL) {
+  if (conversions.pushToDeal < mergedBenchmarks.PUSH_TO_DEAL) {
     zones.push({
-      severity: conversions.pushToDeal < CONVERSION_BENCHMARKS.PUSH_TO_DEAL - REDZONE_TOLERANCE ? 'critical' : 'warning',
+      severity:
+        conversions.pushToDeal < mergedBenchmarks.PUSH_TO_DEAL - REDZONE_TOLERANCE
+          ? 'critical'
+          : 'warning',
       stage: 'push_to_deal',
       title: 'Проседание на финальном закрытии',
       description: 'Клиенты доходят до дожима, но оплаты нет',

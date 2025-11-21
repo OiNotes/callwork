@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireManager } from '@/lib/auth/get-session'
 import { calculateConversions } from '@/lib/analytics/conversions'
-import { CONVERSION_BENCHMARKS } from '@/lib/config/conversionBenchmarks'
 import { calculateManagerStats } from '@/lib/analytics/funnel'
+import { getSettingsForUser } from '@/lib/settings/context'
 
 export async function GET(request: Request) {
   try {
@@ -16,6 +16,8 @@ export async function GET(request: Request) {
     const endDate = searchParams.get('endDate') 
       ? new Date(searchParams.get('endDate')!) 
       : new Date()
+
+    const { settings } = await getSettingsForUser(manager.id, manager.role)
     
     // Получить всех работников менеджера
     const employees = await prisma.user.findMany({
@@ -51,18 +53,24 @@ export async function GET(request: Request) {
     })
 
     // 2. Считаем статистику по всем отчетам
-    const teamStatsRaw = await calculateManagerStats(allTeamReports, manager.id)
+    const teamStatsRaw = await calculateManagerStats(allTeamReports, manager.id, {
+      salesPerDeal: settings.salesPerDeal,
+      planMode: 'team',
+    })
     
     // 3. Добавляем расчеты конверсий для команды
-    const teamConversions = calculateConversions({
-      zoomBooked: teamStatsRaw.zoomBooked,
-      zoom1Held: teamStatsRaw.zoom1Held,
-      zoom2Held: teamStatsRaw.zoom2Held,
-      contractReview: teamStatsRaw.contractReview,
-      pushCount: teamStatsRaw.pushCount,
-      successfulDeals: teamStatsRaw.successfulDeals,
-      monthlySalesAmount: teamStatsRaw.salesAmount,
-    })
+    const teamConversions = calculateConversions(
+      {
+        zoomBooked: teamStatsRaw.zoomBooked,
+        zoom1Held: teamStatsRaw.zoom1Held,
+        zoom2Held: teamStatsRaw.zoom2Held,
+        contractReview: teamStatsRaw.contractReview,
+        pushCount: teamStatsRaw.pushCount,
+        successfulDeals: teamStatsRaw.successfulDeals,
+        monthlySalesAmount: teamStatsRaw.salesAmount,
+      },
+      settings.conversionBenchmarks
+    )
 
     const teamStats = {
       ...teamStatsRaw,
@@ -82,16 +90,22 @@ export async function GET(request: Request) {
     // Для каждого работника посчитать статистику
     const employeesWithStats = await Promise.all(
       employees.map(async (employee) => {
-        const stats = await calculateManagerStats(employee.reports, employee.id)
-        const conversions = calculateConversions({
-          zoomBooked: stats.zoomBooked,
-          zoom1Held: stats.zoom1Held,
-          zoom2Held: stats.zoom2Held,
-          contractReview: stats.contractReview,
-          pushCount: stats.pushCount,
-          successfulDeals: stats.successfulDeals,
-          monthlySalesAmount: stats.salesAmount,
+        const stats = await calculateManagerStats(employee.reports, employee.id, {
+          salesPerDeal: settings.salesPerDeal,
+          planMode: 'user',
         })
+        const conversions = calculateConversions(
+          {
+            zoomBooked: stats.zoomBooked,
+            zoom1Held: stats.zoom1Held,
+            zoom2Held: stats.zoom2Held,
+            contractReview: stats.contractReview,
+            pushCount: stats.pushCount,
+            successfulDeals: stats.successfulDeals,
+            monthlySalesAmount: stats.salesAmount,
+          },
+          settings.conversionBenchmarks
+        )
 
         return {
           ...employee,
@@ -99,15 +113,16 @@ export async function GET(request: Request) {
           planSales: stats.planSales,
           planDeals: stats.planDeals,
           hasRedZone:
-            conversions.zoom1ToZoom2 < CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2 ||
-            conversions.pushToDeal < CONVERSION_BENCHMARKS.PUSH_TO_DEAL,
+            conversions.zoom1ToZoom2 < settings.conversionBenchmarks.ZOOM1_TO_ZOOM2 ||
+            conversions.pushToDeal < settings.conversionBenchmarks.PUSH_TO_DEAL,
         }
       })
     )
     
     return NextResponse.json({ 
       employees: employeesWithStats,
-      teamStats // Возвращаем общую статистику
+      teamStats, // Возвращаем общую статистику
+      settings,
     })
   } catch (error) {
     console.error('GET /api/employees error:', error)

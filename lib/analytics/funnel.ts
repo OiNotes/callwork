@@ -3,6 +3,7 @@ import type { ManagerStats } from '@/lib/analytics/funnel.client'
 import { GoalService } from '@/lib/services/GoalService'
 import { computeConversions } from '@/lib/calculations/metrics'
 import { PLAN_HEURISTICS } from '@/lib/config/metrics'
+type PlanMode = 'team' | 'user'
 
 // Re-export types and client functions from funnel.client.ts
 export type { ManagerStats, FunnelStage } from '@/lib/analytics/funnel.client'
@@ -17,8 +18,11 @@ export { BENCHMARKS, getHeatmapColor, getFunnelData, analyzeRedZones, calculateM
  */
 export async function calculateManagerStats(
   reports: Report[],
-  managerId: string
+  managerId: string,
+  options?: { salesPerDeal?: number; planMode?: PlanMode; planSalesOverride?: number }
 ): Promise<Omit<ManagerStats, 'id' | 'name'>> {
+  const salesPerDeal = options?.salesPerDeal ?? PLAN_HEURISTICS.SALES_PER_DEAL
+  const planMode: PlanMode = options?.planMode ?? 'team'
   const totals = reports.reduce(
     (acc, report) => {
       const pushCount = (report as any).pushCount ?? report.contractReviewCount ?? 0
@@ -59,8 +63,13 @@ export async function calculateManagerStats(
   const convMap = Object.fromEntries(stages.map((stage) => [stage.id, stage.conversion]))
 
   // Получаем цель из БД через единый источник данных
-  const planSales = await GoalService.getTeamGoal(managerId)
-  const planDeals = Math.max(1, Math.round(planSales / PLAN_HEURISTICS.SALES_PER_DEAL))
+  const planSales =
+    options?.planSalesOverride !== undefined
+      ? options.planSalesOverride
+      : planMode === 'user'
+      ? await GoalService.getUserGoal(managerId)
+      : await GoalService.getTeamGoal(managerId)
+  const planDeals = Math.max(1, Math.round(planSales / salesPerDeal))
 
   // Рассчитываем активность на основе реальных данных
   const expectedActivity = totals.zoomBooked > 0 ? 100 : 0

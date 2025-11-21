@@ -25,16 +25,23 @@ export interface ConversionsResult {
   totalConversion: number
 }
 
+export type ConversionBenchmarkConfig = typeof CONVERSION_BENCHMARKS
+
 const round2 = (num: number) => Math.round(num * 100) / 100
 const safeRate = (value: number, base: number) => (base > 0 ? round2((value / base) * 100) : 0)
 
-export function computeConversions(totals: ConversionTotals): ConversionsResult {
+export function computeConversions(
+  totals: ConversionTotals,
+  options?: { benchmarks?: Partial<ConversionBenchmarkConfig> }
+): ConversionsResult {
+  const benchmarks = { ...CONVERSION_BENCHMARKS, ...(options?.benchmarks ?? {}) }
+
   const pairs: Array<{ id: FunnelStageId; prevId: FunnelStageId; benchmark: number }> = [
-    { id: 'zoom1Held', prevId: 'zoomBooked', benchmark: CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1 },
-    { id: 'zoom2Held', prevId: 'zoom1Held', benchmark: CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2 },
-    { id: 'contractReview', prevId: 'zoom2Held', benchmark: CONVERSION_BENCHMARKS.ZOOM2_TO_CONTRACT },
-    { id: 'push', prevId: 'contractReview', benchmark: CONVERSION_BENCHMARKS.CONTRACT_TO_PUSH },
-    { id: 'deal', prevId: 'push', benchmark: CONVERSION_BENCHMARKS.PUSH_TO_DEAL },
+    { id: 'zoom1Held', prevId: 'zoomBooked', benchmark: benchmarks.BOOKED_TO_ZOOM1 },
+    { id: 'zoom2Held', prevId: 'zoom1Held', benchmark: benchmarks.ZOOM1_TO_ZOOM2 },
+    { id: 'contractReview', prevId: 'zoom2Held', benchmark: benchmarks.ZOOM2_TO_CONTRACT },
+    { id: 'push', prevId: 'contractReview', benchmark: benchmarks.CONTRACT_TO_PUSH },
+    { id: 'deal', prevId: 'push', benchmark: benchmarks.PUSH_TO_DEAL },
   ]
 
   const stageMap: Record<FunnelStageId, number> = {
@@ -75,29 +82,38 @@ export function computeConversions(totals: ConversionTotals): ConversionsResult 
 }
 
 export function stageBenchmarkById(id: FunnelStageId): number {
+  return stageBenchmarkByIdWithOverrides(id, undefined)
+}
+
+export function stageBenchmarkByIdWithOverrides(
+  id: FunnelStageId,
+  benchmarks?: Partial<ConversionBenchmarkConfig>
+): number {
+  const merged = { ...CONVERSION_BENCHMARKS, ...(benchmarks ?? {}) }
+
   switch (id) {
     case 'zoomBooked':
       return 100
     case 'zoom1Held':
-      return CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1
+      return merged.BOOKED_TO_ZOOM1
     case 'zoom2Held':
-      return CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2
+      return merged.ZOOM1_TO_ZOOM2
     case 'contractReview':
-      return CONVERSION_BENCHMARKS.ZOOM2_TO_CONTRACT
+      return merged.ZOOM2_TO_CONTRACT
     case 'push':
-      return CONVERSION_BENCHMARKS.CONTRACT_TO_PUSH
+      return merged.CONTRACT_TO_PUSH
     case 'deal':
-      return CONVERSION_BENCHMARKS.PUSH_TO_DEAL
+      return merged.PUSH_TO_DEAL
     default:
       return 100
   }
 }
 
-export function resolveNorthStarStatus(value: number) {
+export function resolveNorthStarStatus(value: number, northStarTarget = KPI_BENCHMARKS.NORTH_STAR) {
   return {
-    target: KPI_BENCHMARKS.NORTH_STAR,
-    delta: round2(value - KPI_BENCHMARKS.NORTH_STAR),
-    isOnTrack: value >= KPI_BENCHMARKS.NORTH_STAR,
+    target: northStarTarget,
+    delta: round2(value - northStarTarget),
+    isOnTrack: value >= northStarTarget,
   }
 }
 

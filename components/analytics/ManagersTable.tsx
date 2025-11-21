@@ -1,15 +1,31 @@
 'use client'
 
-import { ManagerStats, BENCHMARKS, getHeatmapColor } from '@/lib/analytics/funnel.client'
+import { ManagerStats, getHeatmapColor } from '@/lib/analytics/funnel.client'
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/format'
+import { CONVERSION_BENCHMARKS, KPI_BENCHMARKS } from '@/lib/config/metrics'
+import type { ConversionBenchmarkConfig } from '@/lib/calculations/metrics'
 
 interface ManagersTableProps {
   managers: ManagerStats[]
+  benchmarks?: Partial<ConversionBenchmarkConfig>
+  activityTarget?: number
 }
 
-export function ManagersTable({ managers }: ManagersTableProps) {
+export function ManagersTable({ managers, benchmarks, activityTarget }: ManagersTableProps) {
   const sortedManagers = [...managers].sort((a, b) => b.salesAmount - a.salesAmount)
+  const mergedBenchmarks: ConversionBenchmarkConfig = {
+    ...CONVERSION_BENCHMARKS,
+    ...(benchmarks ?? {}),
+  }
+  const activityNorm = activityTarget ?? KPI_BENCHMARKS.ACTIVITY_SCORE
+  const norm = {
+    bookedToZoom1: mergedBenchmarks.BOOKED_TO_ZOOM1,
+    zoom1ToZoom2: mergedBenchmarks.ZOOM1_TO_ZOOM2,
+    zoom2ToContract: mergedBenchmarks.ZOOM2_TO_CONTRACT,
+    contractToPush: mergedBenchmarks.CONTRACT_TO_PUSH,
+    pushToDeal: mergedBenchmarks.PUSH_TO_DEAL,
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -22,23 +38,23 @@ export function ManagersTable({ managers }: ManagersTableProps) {
             <th className="px-4 py-2">Сделки</th>
             <th className="px-4 py-2 text-center">
               <div>Запись → 1-й Zoom</div>
-              <div className="text-[10px] opacity-70">Норма {BENCHMARKS.bookedToZoom1}%</div>
+              <div className="text-[10px] opacity-70">Норма {norm.bookedToZoom1}%</div>
             </th>
             <th className="px-4 py-2 text-center">
               <div>1-й → 2-й Zoom</div>
-              <div className="text-[10px] opacity-70">Норма {BENCHMARKS.zoom1ToZoom2}%</div>
+              <div className="text-[10px] opacity-70">Норма {norm.zoom1ToZoom2}%</div>
             </th>
             <th className="px-4 py-2 text-center">
               <div>2-й Zoom → Договор</div>
-              <div className="text-[10px] opacity-70">Норма {BENCHMARKS.zoom2ToContract}%</div>
+              <div className="text-[10px] opacity-70">Норма {norm.zoom2ToContract}%</div>
             </th>
             <th className="px-4 py-2 text-center">
               <div>Договор → Дожим</div>
-              <div className="text-[10px] opacity-70">Норма {BENCHMARKS.contractToPush}%</div>
+              <div className="text-[10px] opacity-70">Норма {norm.contractToPush}%</div>
             </th>
             <th className="px-4 py-2 text-center">
               <div>Дожим → Оплата</div>
-              <div className="text-[10px] opacity-70">Норма {BENCHMARKS.pushToDeal}%</div>
+              <div className="text-[10px] opacity-70">Норма {norm.pushToDeal}%</div>
             </th>
             <th className="px-4 py-2 text-center">Активность</th>
           </tr>
@@ -96,27 +112,27 @@ export function ManagersTable({ managers }: ManagersTableProps) {
                 </td>
 
                 <td
-                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.bookedToZoom1, BENCHMARKS.bookedToZoom1)}`}
+                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.bookedToZoom1, norm.bookedToZoom1)}`}
                 >
                   {manager.bookedToZoom1}%
                 </td>
                 <td
-                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.zoom1ToZoom2, BENCHMARKS.zoom1ToZoom2)}`}
+                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.zoom1ToZoom2, norm.zoom1ToZoom2)}`}
                 >
                   {manager.zoom1ToZoom2}%
                 </td>
                 <td
-                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.zoom2ToContract, BENCHMARKS.zoom2ToContract)}`}
+                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.zoom2ToContract, norm.zoom2ToContract)}`}
                 >
                   {manager.zoom2ToContract}%
                 </td>
                 <td
-                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.contractToPush, BENCHMARKS.contractToPush)}`}
+                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.contractToPush, norm.contractToPush)}`}
                 >
                   {manager.contractToPush}%
                 </td>
                 <td
-                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.pushToDeal, BENCHMARKS.pushToDeal)}`}
+                  className={`px-4 py-3 text-center font-mono font-medium border-l border-[var(--border)] ${getHeatmapColor(manager.pushToDeal, norm.pushToDeal)}`}
                 >
                   {manager.pushToDeal}%
                 </td>
@@ -124,7 +140,7 @@ export function ManagersTable({ managers }: ManagersTableProps) {
                 <td className="px-4 py-3 text-center rounded-r-lg">
                   <div
                     className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                      manager.activityScore >= BENCHMARKS.activityScore
+                      manager.activityScore >= activityNorm
                         ? 'bg-[var(--secondary)] text-[var(--foreground)]'
                         : 'bg-[var(--danger)]/10 text-[var(--danger)]'
                     }`}

@@ -71,20 +71,20 @@ export function RedZoneAlerts({ alerts }: RedZoneAlertsProps) {
                         className={`
               p-4 rounded-lg border-l-4 shadow-sm
               ${group.hasCritical
-                                ? 'bg-red-50 border-l-red-500'
-                                : 'bg-gray-50 border-l-amber-500'}
+                                ? 'bg-[var(--danger)]/10 border-l-[var(--danger)]'
+                                : 'bg-[var(--warning)]/10 border-l-[var(--warning)]'}
             `}
                     >
                         <div className="flex items-start gap-4">
                             <div className="mt-0.5">
                                 {group.hasCritical ? (
-                                    <AlertCircle className="w-5 h-5 text-red-600" />
+                                    <AlertCircle className="w-5 h-5 text-[var(--danger)]" />
                                 ) : (
-                                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                                    <AlertTriangle className="w-5 h-5 text-[var(--warning)]" />
                                 )}
                             </div>
                             <div className="flex-1">
-                                <h4 className={`font-bold text-sm flex items-center gap-2 ${group.hasCritical ? 'text-red-900' : 'text-gray-900'}`}>
+                                <h4 className={`font-bold text-sm flex items-center gap-2 ${group.hasCritical ? 'text-[var(--danger)]' : 'text-[var(--foreground)]'}`}>
                                     {group.managerName ? (
                                         <span>{group.managerName}</span>
                                     ) : (

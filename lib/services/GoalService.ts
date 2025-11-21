@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { RopSettingsService } from '@/lib/services/RopSettingsService'
 
 /**
  * GoalService - единый источник данных для целей продаж
@@ -28,6 +29,11 @@ export class GoalService {
    * @returns Суммарная цель команды в рублях
    */
   static async getTeamGoal(managerId: string): Promise<number> {
+    const settings = await RopSettingsService.getEffectiveSettings(managerId)
+    if (settings.departmentGoal && settings.departmentGoal > 0) {
+      return settings.departmentGoal
+    }
+
     const team = await prisma.user.findMany({
       where: {
         OR: [
