@@ -1,8 +1,4 @@
-import {
-  CONVERSION_BENCHMARKS,
-  FUNNEL_STAGES,
-  FunnelStageId,
-} from '@/lib/config/conversionBenchmarks'
+import { FUNNEL_STAGES, FunnelStageId } from '@/lib/config/conversionBenchmarks'
 import { computeConversions, getStageLabel as getLabelFromConfig, resolveNorthStarStatus } from '@/lib/calculations/metrics'
 
 const round2 = (num: number) => Math.round(num * 100) / 100
@@ -63,7 +59,7 @@ export interface FullFunnelResult {
 }
 
 export function calculateFullFunnel(totals: FunnelTotals): FullFunnelResult {
-  const { stages, northStar, totalConversion } = computeConversions({
+  const { stages, northStar } = computeConversions({
     zoomBooked: totals.zoomBooked,
     zoom1Held: totals.zoom1Held,
     zoom2Held: totals.zoom2Held,

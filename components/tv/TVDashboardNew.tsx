@@ -334,15 +334,8 @@ export default function TVDashboardNew() {
   }
 
   // Calculate additional metrics
-  // ВАЖНО: Если у сотрудников нет целей, используем fallback только для TV demo
-  // В production GOAL должен быть установлен через GoalService
-  const GOAL = data.leaderboard[0]?.goal || 0
-  const progressPercent = GOAL > 0 ? Math.min(100, (revenue / GOAL) * 100) : 0
-
-  // Warning если нет целей (только в dev mode)
-  if (GOAL === 0 && process.env.NODE_ENV === 'development') {
-    console.warn('⚠️ TV Dashboard: У сотрудников не установлены цели (monthlyGoal)')
-  }
+  const GOAL = data.leaderboard[0]?.goal || 1500000
+  const progressPercent = Math.min(100, (revenue / GOAL) * 100)
 
   // Prepare leaderboard (top 6)
   const leaderboard = data.leaderboard.slice(0, 6).map(emp => ({

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     // --- РАСЧЕТ ОБЩЕЙ СТАТИСТИКИ КОМАНДЫ (Менеджер + Сотрудники) ---
     
     // 1. Получаем отчеты всей команды (включая менеджера) для корректного факта
-    const teamUserIds = [manager.id, ...employees.map(e => e.id)]
+    const teamUserIds = [manager.id, ...employees.map((e) => e.id)]
     const allTeamReports = await prisma.report.findMany({
       where: {
         userId: { in: teamUserIds },

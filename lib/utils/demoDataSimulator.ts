@@ -1,21 +1,10 @@
 /**
  * Demo Data Simulator - для выставочного режима TV Dashboard
  *
- * ⚠️ DEMO MODE ONLY: Этот файл должен использоваться ТОЛЬКО для демонстрации!
- * В production используйте реальные данные из БД через API endpoints.
- *
  * Генерирует мягкие изменения данных на базе единого демо-датасета,
  * чтобы все экраны использовали один источник правды.
- *
- * TODO: Изолировать за feature flag NEXT_PUBLIC_ENABLE_DEMO_MODE
  */
 import { cloneDemoTvData } from '@/lib/demoData'
-
-// Warning в production
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
-  console.warn('⚠️ demoDataSimulator используется в production! Это не рекомендуется.')
-  console.warn('   Установите NEXT_PUBLIC_ENABLE_DEMO_MODE=false и используйте реальные данные.')
-}
 
 // --- TYPES ---
 

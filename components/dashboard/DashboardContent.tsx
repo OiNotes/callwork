@@ -10,7 +10,7 @@ import { RedZoneAlerts } from '@/components/analytics/RedZoneAlerts'
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrendChart'
 import { MotivationWidget } from '@/components/dashboard/MotivationWidget'
 import { DealsList, DealCard } from '@/components/deals/DealsList'
-import { calculateManagerStatsClient, getFunnelData, ManagerStats, analyzeRedZones } from '@/lib/analytics/funnel.client'
+import { getFunnelData, ManagerStats, analyzeRedZones } from '@/lib/analytics/funnel.client'
 import { calculateFullFunnel, NorthStarKpi } from '@/lib/calculations/funnel'
 import { PeriodSelector, PeriodPreset } from '@/components/filters/PeriodSelector'
 import { ManagerSelector } from '@/components/filters/ManagerSelector'
@@ -237,7 +237,7 @@ export function DashboardContent({ user }: DashboardContentProps) {
     }
 
     fetchData()
-  }, [user.role, dateRange.start, dateRange.end, selectedManagerId]) 
+  }, [user.role, dateRange.start, dateRange.end, selectedManagerId, recomputeViews]) 
 
   // Update recompute effect to use the stored server stats
   useEffect(() => {

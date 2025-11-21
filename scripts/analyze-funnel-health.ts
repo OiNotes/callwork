@@ -102,7 +102,7 @@ function findRedZones(conversions: any): RedZone[] {
     {
       stage: 'North Star',
       current: conversions.northStar,
-      benchmark: CONVERSION_BENCHMARKS.NORTH_STAR,
+      benchmark: CONVERSION_BENCHMARKS.ZOOM1_TO_DEAL_KPI,
       critical: true,
       impact: 'Общая эффективность воронки'
     }
@@ -180,7 +180,11 @@ async function calculateHealthScore(metrics: FunnelMetrics): Promise<number> {
 
   Object.entries(weights).forEach(([key, weight]) => {
     const current = metrics.conversions[key as keyof typeof metrics.conversions]
-    const benchmark = CONVERSION_BENCHMARKS[key.toUpperCase().replace(/([A-Z])/g, '_$1') as keyof typeof CONVERSION_BENCHMARKS]
+    const benchKey =
+      key === 'northStar'
+        ? 'ZOOM1_TO_DEAL_KPI'
+        : (key.toUpperCase().replace(/([A-Z])/g, '_$1') as keyof typeof CONVERSION_BENCHMARKS)
+    const benchmark = CONVERSION_BENCHMARKS[benchKey as keyof typeof CONVERSION_BENCHMARKS]
 
     if (benchmark) {
       const ratio = Math.min(current / benchmark, 1.5) // cap at 150%

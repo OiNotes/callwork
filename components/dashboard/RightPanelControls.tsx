@@ -28,6 +28,8 @@ export function RightPanelControls({
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    // Portal rendering depends on document, enable after mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
 

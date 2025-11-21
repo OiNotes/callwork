@@ -53,28 +53,6 @@ export class GoalService {
   }
 
   /**
-   * Получить ID всех членов команды (менеджер + активные сотрудники)
-   * Этот метод устраняет дублирование запросов команды в разных сервисах
-   *
-   * @param managerId - ID менеджера
-   * @returns Массив ID пользователей команды
-   */
-  static async getTeamUserIds(managerId: string): Promise<string[]> {
-    const team = await prisma.user.findMany({
-      where: {
-        OR: [
-          { id: managerId }, // Сам менеджер
-          { managerId: managerId } // Его сотрудники
-        ],
-        isActive: true // Только активные
-      },
-      select: { id: true }
-    })
-
-    return team.map(user => user.id)
-  }
-
-  /**
    * Получить информацию о целях для команды
    * @param managerId - ID менеджера
    * @returns Детальная информация о целях команды

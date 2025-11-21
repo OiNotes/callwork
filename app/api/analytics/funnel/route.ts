@@ -145,10 +145,10 @@ export async function GET(request: NextRequest) {
     })
 
     const managerStats: Array<ManagerStats & { id: string; name: string }> = await Promise.all(
-      employees.map(async (emp) => ({
+      employees.map(async (emp): Promise<ManagerStats & { id: string; name: string }> => ({
+        ...(await calculateManagerStats(emp.reports, emp.id)),
         id: emp.id,
         name: emp.name,
-        ...(await calculateManagerStats(emp.reports, emp.id)),
       }))
     )
 

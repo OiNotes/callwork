@@ -17,7 +17,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { GoalService } from '@/lib/services/GoalService'
-import Decimal from 'decimal.js'
+import { Decimal } from '@prisma/client/runtime/library'
 
 interface ValidationIssue {
   severity: 'ERROR' | 'WARNING' | 'INFO'
@@ -39,7 +39,7 @@ async function validateGoals() {
   const managers = await prisma.user.findMany({
     where: { role: 'MANAGER', isActive: true },
     include: {
-      employees: {
+      managedUsers: {
         where: { isActive: true },
         select: {
           id: true,
@@ -87,7 +87,7 @@ async function validateGoals() {
     }
 
     // Проверка 3: Реалистичность
-    const avgEmployeeGoal = employeesGoal.dividedBy(manager.employees.length || 1)
+    const avgEmployeeGoal = employeesGoal.dividedBy(manager.managedUsers.length || 1)
     if (avgEmployeeGoal.greaterThan(5000000)) {
       issues.push({
         severity: 'WARNING',
@@ -124,7 +124,7 @@ async function validateReports() {
   for (const report of reports) {
     // Проверка 1: Отрицательные значения
     const negativeFields = []
-    if (report.monthlySalesAmount < 0) negativeFields.push('monthlySalesAmount')
+    if (new Decimal(report.monthlySalesAmount).lessThan(0)) negativeFields.push('monthlySalesAmount')
     if (report.successfulDeals < 0) negativeFields.push('successfulDeals')
     if (report.zoomAppointments < 0) negativeFields.push('zoomAppointments')
 
@@ -152,7 +152,6 @@ async function validateReports() {
     const {
       zoomAppointments,
       pzmConducted,
-      vzmConducted,
       contractReviewCount,
       successfulDeals
     } = report
@@ -184,17 +183,13 @@ async function validateReports() {
 async function validateDeals() {
   console.log('\n💼 Проверка сделок (Deals)...\n')
 
-  const deals = await prisma.deal.findMany({
-    include: {
-      user: {
-        select: { name: true }
-      }
-    }
-  })
+  const deals = await prisma.deal.findMany()
 
   for (const deal of deals) {
+    const budget = new Decimal(deal.budget)
+
     // Проверка 1: Отрицательный budget
-    if (deal.budget < 0) {
+    if (budget.lessThan(0)) {
       issues.push({
         severity: 'ERROR',
         category: 'Deals',
@@ -204,7 +199,6 @@ async function validateDeals() {
     }
 
     // Проверка 2: Очень большой budget
-    const budget = new Decimal(deal.budget)
     if (budget.greaterThan(50000000)) {
       issues.push({
         severity: 'WARNING',
@@ -215,7 +209,7 @@ async function validateDeals() {
     }
 
     // Проверка 3: Закрытая сделка без даты
-    if (deal.status === 'CLOSED' && !deal.closedAt) {
+    if (deal.status === 'WON' && !deal.closedAt) {
       issues.push({
         severity: 'WARNING',
         category: 'Deals',

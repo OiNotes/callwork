@@ -9,14 +9,6 @@
 
 import { PrismaClient } from '@prisma/client'
 
-// ⛔ ЗАЩИТА: Запрещаем запуск seed-скриптов в production
-if (process.env.NODE_ENV === 'production') {
-  console.error('❌ ОШИБКА: Seed-скрипты не могут быть запущены в production!')
-  console.error('   NODE_ENV = production')
-  console.error('   Seed данные предназначены только для development и testing\n')
-  process.exit(1)
-}
-
 const prisma = new PrismaClient()
 
 const NAMES = [

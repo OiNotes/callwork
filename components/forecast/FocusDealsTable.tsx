@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Zap, Search, ArrowUpDown, AlertCircle } from 'lucide-react'
+import { Zap, Search, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Deal {
@@ -47,7 +47,7 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
       
       toast.success(currentStatus ? 'Сделка убрана из фокуса' : 'Сделка добавлена в фокус')
       onUpdate() // Trigger global recalc
-    } catch (error) {
+    } catch (_error) {
       // Revert on error
       setLocalDeals(previousDeals)
       toast.error('Ошибка обновления')
@@ -128,7 +128,7 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
                     </div>
                 </td>
                 <td className="px-6 py-4 text-right text-[var(--muted-foreground)]">
-                    {new Intl.NumberFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(deal.createdAt))}
+                    {new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(deal.createdAt))}
                 </td>
               </motion.tr>
             ))}

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { calculateMonthlyForecast } from '@/lib/calculations/forecast'
 import { MOTIVATION_GRADE_PRESETS } from '@/lib/config/motivationGrades'
-import { calculateMotivation, resolveCommissionRate } from '@/lib/motivation/motivationCalculator'
+import { resolveCommissionRate } from '@/lib/motivation/motivationCalculator'
 
 export class MotivationCalculatorService {
   private getCommissionRate(turnover: number): number {

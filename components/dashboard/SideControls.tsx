@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Calendar, Users, X, Check, ChevronRight } from 'lucide-react'
+import { Calendar, X, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PeriodPreset } from '@/components/filters/PeriodSelector'
 
@@ -35,6 +35,7 @@ export function SideControls({
   const [activePanel, setActivePanel] = useState<'none' | 'manager' | 'customDate'>('none')
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Calculator, TrendingUp, Wallet, Zap, Check } from 'lucide-react'
+import { Calculator, Wallet, Zap, Check } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import { ManagerSelector } from '@/components/filters/ManagerSelector'
@@ -263,4 +263,3 @@ export default function IncomeForecastPage() {
     </div>
   )
 }
-

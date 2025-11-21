@@ -13,7 +13,7 @@ async function main() {
       monthlyGoal: true,
       _count: {
         select: {
-          employees: true
+          managedUsers: true
         }
       }
     }
@@ -29,7 +29,7 @@ async function main() {
   console.log('  Email:', manager.email)
   console.log('  Role:', manager.role)
   console.log('  Monthly Goal:', manager.monthlyGoal ? `${Number(manager.monthlyGoal).toLocaleString()} ₽` : 'NOT SET')
-  console.log('  Employees count:', manager._count.employees)
+  console.log('  Employees count:', manager._count.managedUsers)
   console.log('')
 
   // Check employees and their reports

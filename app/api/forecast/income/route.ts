@@ -17,8 +17,8 @@ export async function GET(request: Request) {
 
   let targetUserId = session.user.id
 
-  // Allow Managers/Admins to view other users' data
-  if (requestedUserId && (session.user.role === 'MANAGER' || session.user.role === 'ADMIN')) {
+  // Allow managers to view other users' data
+  if (requestedUserId && session.user.role === 'MANAGER') {
     targetUserId = requestedUserId
   }
 

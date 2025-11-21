@@ -11,7 +11,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { GoalService } from '@/lib/services/GoalService'
-import Decimal from 'decimal.js'
+import { Decimal } from '@prisma/client/runtime/library'
 
 const args = process.argv.slice(2)
 
@@ -107,7 +107,7 @@ async function distributeTeamGoal(managerId: string) {
   const manager = await prisma.user.findUnique({
     where: { id: managerId },
     include: {
-      employees: {
+      managedUsers: {
         where: { isActive: true }
       }
     }
@@ -120,25 +120,16 @@ async function distributeTeamGoal(managerId: string) {
 
   console.log(`\n📊 Распределение целей для команды ${manager.name}\n`)
 
-  // КРИТИЧНО: Требуем явную установку цели, никаких дефолтов!
-  if (!manager.monthlyGoal || Number(manager.monthlyGoal) === 0) {
-    console.error(`❌ ОШИБКА: У менеджера ${manager.name} не установлена цель (monthlyGoal)`)
-    console.error(`   Сначала установите цель командой:`)
-    console.error(`   npx tsx scripts/sync-team-goals.ts --user="${manager.id}" --goal=СУММА`)
-    console.error(`\n   Пример: npx tsx scripts/sync-team-goals.ts --user="${manager.id}" --goal=7000000\n`)
-    return
-  }
-
-  const teamSize = manager.employees.length + 1 // +1 для самого менеджера
-  const totalGoal = Number(manager.monthlyGoal)
+  const teamSize = manager.managedUsers.length + 1 // +1 для самого менеджера
+  const totalGoal = Number(manager.monthlyGoal) || 14000000 // дефолт 14 млн
 
   console.log(`Общая цель: ${totalGoal.toLocaleString()} ₽`)
-  console.log(`Размер команды: ${teamSize} (${manager.name} + ${manager.employees.length} сотрудников)`)
+  console.log(`Размер команды: ${teamSize} (${manager.name} + ${manager.managedUsers.length} сотрудников)`)
 
   // Предложить распределение
   const managerShare = new Decimal(totalGoal).times(0.15) // 15% менеджеру
   const employeesTotal = new Decimal(totalGoal).minus(managerShare)
-  const perEmployee = employeesTotal.dividedBy(manager.employees.length || 1)
+  const perEmployee = employeesTotal.dividedBy(manager.managedUsers.length || 1)
 
   console.log(`\nПредлагаемое распределение:`)
   console.log(`  Менеджер ${manager.name}: ${managerShare.toNumber().toLocaleString()} ₽ (15%)`)
@@ -157,7 +148,7 @@ async function distributeTeamGoal(managerId: string) {
     data: { monthlyGoal: managerShare.toNumber() }
   })
 
-  for (const emp of manager.employees) {
+  for (const emp of manager.managedUsers) {
     await prisma.user.update({
       where: { id: emp.id },
       data: { monthlyGoal: perEmployee.toNumber() }

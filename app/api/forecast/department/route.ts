@@ -12,7 +12,7 @@ export async function GET() {
     return new NextResponse('Unauthorized', { status: 401 })
   }
 
-  if (session.user.role !== 'MANAGER' && session.user.role !== 'ADMIN') { // Assuming 'ADMIN' might act as manager
+  if (session.user.role !== 'MANAGER') {
      return new NextResponse('Forbidden', { status: 403 })
   }
 

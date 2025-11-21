@@ -28,15 +28,13 @@ export async function PATCH(
       return new NextResponse('Deal not found', { status: 404 })
     }
 
-    // Allow if: 
+    // Allow if:
     // - User is the deal owner
     // - User is a MANAGER (managers can edit anyone's deals usually, or check hierarchy)
-    // - User is ADMIN
     const isOwner = deal.managerId === session.user.id
     const isManager = session.user.role === 'MANAGER'
-    const isAdmin = session.user.role === 'ADMIN'
 
-    if (!isOwner && !isManager && !isAdmin) {
+    if (!isOwner && !isManager) {
         return new NextResponse('Forbidden', { status: 403 })
     }
 
