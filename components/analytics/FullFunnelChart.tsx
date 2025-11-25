@@ -1,9 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { AlertTriangle, Users, TrendingDown, Flame, XCircle } from 'lucide-react'
+import { AlertTriangle, Users, TrendingDown, Flame, XCircle, Activity, ChevronDown } from 'lucide-react'
 import { getConversionColor, formatNumber, formatPercent } from '@/lib/calculations/funnel'
 import type { FunnelStage, SideFlow } from '@/lib/calculations/funnel'
+import { useMemo } from 'react'
 
 interface FullFunnelChartProps {
   funnel: FunnelStage[]
@@ -12,68 +13,161 @@ interface FullFunnelChartProps {
 }
 
 export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelChartProps) {
+  const maxValue = useMemo(() => funnel[0]?.value || 1, [funnel])
+
   if (!funnel || funnel.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[500px] text-slate-400">
-        <p>Нет данных для отображения воронки</p>
+      <div className="flex flex-col items-center justify-center h-[400px] text-[var(--muted-foreground)] bg-[var(--muted)]/50 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)]">
+        <Activity className="w-12 h-12 mb-4 opacity-50" />
+        <p className="font-medium">Нет данных для воронки</p>
       </div>
     )
   }
 
-  const maxValue = funnel[0]?.value || 1
+  // Calculate dropoff percentages
+  const getDropoff = (currentValue: number, nextValue: number) => {
+    if (currentValue <= 0) return 0
+    return ((currentValue - nextValue) / currentValue) * 100
+  }
 
   return (
-    <div className="grid grid-cols-[1fr_300px] gap-8">
-      {/* Основная воронка */}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 p-2">
+      {/* Main Funnel Visualization */}
       <div className="relative">
-        <div className="space-y-4">
+        {/* Subtle background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[var(--primary)]/[0.02] via-transparent to-[var(--danger)]/[0.02] -z-10 rounded-[var(--radius-lg)] pointer-events-none" />
+
+        {/* Funnel Container */}
+        <div className="relative flex flex-col items-center py-4">
           {funnel.map((stage, index) => {
-            const widthPercent = (stage.value / maxValue) * 100
+            // Calculate trapezoid width - gradually narrowing
+            const widthPercent = Math.max(100 - (index * 12), 40)
+            const nextWidthPercent = Math.max(100 - ((index + 1) * 12), 40)
             const color = getConversionColor(stage.conversion, stage.isRedZone)
+            const isLast = index === funnel.length - 1
+            const dropoff = !isLast && funnel[index + 1] ? getDropoff(stage.value, funnel[index + 1].value) : 0
 
             return (
               <motion.div
-                key={stage.stage}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="relative"
+                key={stage.id || stage.stage}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.5,
+                  delay: index * 0.08,
+                  ease: [0.16, 1, 0.3, 1]
+                }}
+                className="w-full flex flex-col items-center group"
               >
-                {/* Трапеция воронки */}
+                {/* Stage Card */}
                 <motion.div
-                  className="relative mx-auto h-24 cursor-pointer overflow-hidden rounded-lg"
-                  style={{
-                    width: `${Math.max(widthPercent, 20)}%`,
-                    clipPath: index === funnel.length - 1
-                      ? 'polygon(10% 0%, 90% 0%, 85% 100%, 15% 100%)' // Последний этап - сужается
-                      : 'polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%)', // Трапеция
-                    background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
-                  }}
-                  whileHover={{ scale: 1.02, boxShadow: `0 10px 30px ${color}40` }}
+                  className={cn(
+                    "relative overflow-hidden cursor-pointer transition-all duration-300",
+                    "rounded-[var(--radius-lg)] border",
+                    stage.isRedZone
+                      ? "border-[var(--danger)]/30 shadow-[0_0_30px_rgba(239,68,68,0.15)]"
+                      : "border-[var(--border)] shadow-[var(--shadow-sm)]",
+                    "hover:shadow-[var(--shadow-lg)] hover:scale-[1.02]",
+                    "bg-[var(--card)]"
+                  )}
+                  style={{ width: `${widthPercent}%`, minWidth: '300px' }}
                   onClick={() => onStageClick?.(stage)}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.99 }}
                 >
-                  {/* Контент внутри трапеции */}
-                  <div className="flex items-center justify-between px-8 h-full text-white">
-                    <div>
-                      <p className="font-semibold text-lg">{stage.stage}</p>
-                      <p className="text-sm opacity-90">{formatNumber(stage.value)} человек</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold">{formatPercent(stage.conversion)}</p>
-                      {stage.isRedZone && (
-                        <div className="flex items-center gap-1 text-xs mt-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>Red Zone</span>
+                  {/* Gradient overlay based on conversion status */}
+                  <div
+                    className="absolute inset-0 opacity-[0.08] transition-opacity duration-300 group-hover:opacity-[0.12]"
+                    style={{
+                      background: `linear-gradient(135deg, ${color} 0%, transparent 60%)`
+                    }}
+                  />
+
+                  {/* Content */}
+                  <div className="relative flex items-center justify-between px-6 py-5">
+                    {/* Left: Stage number, label & count */}
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="flex items-center justify-center w-11 h-11 rounded-full text-white font-bold text-lg shadow-lg transition-transform duration-300 group-hover:scale-110"
+                        style={{
+                          backgroundColor: color,
+                          boxShadow: `0 4px 14px ${color}40`
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-[var(--foreground)] text-lg leading-tight">
+                          {stage.stage}
+                        </h3>
+                        <div className="flex items-center gap-2 text-[var(--muted-foreground)] mt-1">
+                          <Users className="w-3.5 h-3.5" />
+                          <span className="text-sm font-semibold tabular-nums">{formatNumber(stage.value)}</span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Conversion percentage & status */}
+                    <div className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span
+                          className="text-3xl font-black tracking-tight tabular-nums"
+                          style={{ color }}
+                        >
+                          {formatPercent(stage.conversion)}
+                        </span>
+                        <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mt-0.5">
+                          Конверсия
+                        </span>
+                      </div>
+
+                      {stage.isRedZone && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-[var(--danger)]/10 text-[var(--danger)] text-xs font-bold"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Внимание</span>
+                        </motion.div>
                       )}
                     </div>
                   </div>
                 </motion.div>
 
-                {/* Стрелка вниз между этапами */}
-                {index < funnel.length - 1 && (
-                  <div className="flex justify-center my-2">
-                    <TrendingDown className="w-5 h-5 text-slate-400" />
+                {/* Connector with dropoff indicator */}
+                {!isLast && (
+                  <div className="relative flex flex-col items-center py-1">
+                    {/* Narrowing connector shape */}
+                    <div
+                      className="relative h-8 transition-all duration-300"
+                      style={{
+                        width: `${widthPercent}%`,
+                        minWidth: '300px',
+                        clipPath: `polygon(${(100 - nextWidthPercent/widthPercent * 100) / 2}% 100%, ${100 - (100 - nextWidthPercent/widthPercent * 100) / 2}% 100%, 100% 0%, 0% 0%)`
+                      }}
+                    >
+                      <div
+                        className="absolute inset-0 bg-gradient-to-b from-[var(--border)] to-[var(--border)]/50"
+                        style={{ opacity: 0.3 }}
+                      />
+                    </div>
+
+                    {/* Dropoff badge */}
+                    <motion.div
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.08 + 0.3 }}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 lg:translate-x-8"
+                    >
+                      <div className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap",
+                        "bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20"
+                      )}>
+                        <ChevronDown className="w-3 h-3" />
+                        <span>-{formatPercent(dropoff)} отвал</span>
+                      </div>
+                    </motion.div>
                   </div>
                 )}
               </motion.div>
@@ -82,92 +176,129 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
         </div>
       </div>
 
-      {/* Боковая панель - Отказы и Подогрев */}
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6 }}
-        className="space-y-6"
-      >
-        {/* Отказы */}
-        <div className="glass-card p-6 border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-              <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-white">Отказы</h3>
-              <p className="text-xs text-slate-500">По этапам воронки</p>
-            </div>
+      {/* Side Panel */}
+      <div className="space-y-6">
+        {/* Refusals Card */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="glass-card rounded-[var(--radius-lg)] p-6 overflow-hidden relative"
+        >
+          <div className="absolute top-0 right-0 p-3 opacity-[0.03]">
+            <XCircle className="w-28 h-28" />
           </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between items-baseline">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Количество</span>
-              <span className="text-2xl font-bold text-red-600 dark:text-red-400">
-                {formatNumber(sideFlow.refusals.total)}
-              </span>
-            </div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-sm text-slate-600 dark:text-slate-400">% от 1-го Zoom</span>
-              <span className="text-lg font-semibold text-red-600 dark:text-red-400">
-                {formatPercent(sideFlow.refusals.rateFromFirstZoom)}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {sideFlow.refusals.byStage.map((item) => (
-              <div key={item.stageId} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">{item.label}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">{formatNumber(item.count)}</span>
-                  <span className={`text-xs font-semibold ${item.rate > 20 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    {item.rate.toFixed(1)}%
-                  </span>
-                </div>
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-xl bg-[var(--danger)]/10 text-[var(--danger)]">
+                <TrendingDown className="w-6 h-6" />
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Подогрев */}
-        <div className="glass-card p-6 border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
-              <Flame className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              <div>
+                <h3 className="font-bold text-[var(--foreground)] text-lg">Отказы</h3>
+                <p className="text-xs text-[var(--muted-foreground)] font-medium">Аналитика потерь</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-white">В подогреве</h3>
-              <p className="text-xs text-slate-500">Клиенты на прогреве</p>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="p-4 rounded-xl bg-[var(--muted)] border border-[var(--border)]">
+                <div className="text-2xl font-black text-[var(--foreground)] tabular-nums">
+                  {formatNumber(sideFlow.refusals.total)}
+                </div>
+                <div className="text-xs text-[var(--muted-foreground)] font-medium mt-1">Всего отказов</div>
+              </div>
+              <div className="p-4 rounded-xl bg-[var(--danger)]/10 border border-[var(--danger)]/20">
+                <div className="text-2xl font-black text-[var(--danger)] tabular-nums">
+                  {formatPercent(sideFlow.refusals.rateFromFirstZoom)}
+                </div>
+                <div className="text-xs text-[var(--danger)]/70 font-medium mt-1">От 1-го Zoom</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {sideFlow.refusals.byStage.map((item, i) => (
+                <motion.div
+                  key={item.stageId}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.05 }}
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--muted)] transition-colors"
+                >
+                  <span className="text-sm font-medium text-[var(--muted-foreground)]">{item.label}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-[var(--foreground)] tabular-nums">{formatNumber(item.count)}</span>
+                    <div className={cn(
+                      "text-xs font-bold px-2.5 py-1 rounded-full tabular-nums",
+                      item.rate > 20
+                        ? "bg-[var(--danger)]/10 text-[var(--danger)]"
+                        : "bg-[var(--success)]/10 text-[var(--success)]"
+                    )}>
+                      {formatPercent(item.rate)}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
+        </motion.div>
 
-          <div className="flex justify-between items-baseline">
-            <span className="text-sm text-slate-600 dark:text-slate-400">Всего человек</span>
-            <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+        {/* Warming Card */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="rounded-[var(--radius-lg)] p-6 border border-[var(--warning)]/20 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, color-mix(in srgb, var(--warning) 8%, var(--card)) 0%, var(--card) 100%)'
+          }}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-[var(--warning)]/15 text-[var(--warning)]">
+                <Flame className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-[var(--foreground)] text-lg">В подогреве</h3>
+                <p className="text-xs text-[var(--muted-foreground)] font-medium">Потенциальные сделки</p>
+              </div>
+            </div>
+            <div className="text-4xl font-black text-[var(--warning)] tabular-nums">
               {formatNumber(sideFlow.warming.count)}
-            </span>
+            </div>
           </div>
 
-          {/* Иконки людей визуализация */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {Array.from({ length: Math.min(sideFlow.warming.count, 12) }).map((_, i) => (
+          {/* Visual indicator bars */}
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: Math.min(sideFlow.warming.count, 20) }).map((_, i) => (
               <motion.div
                 key={i}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ duration: 0.3, delay: 0.6 + i * 0.05 }}
-              >
-                <Users className="w-4 h-4 text-orange-400" />
-              </motion.div>
+                initial={{ scaleY: 0 }}
+                animate={{ scaleY: 1 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 20,
+                  delay: 0.5 + i * 0.02
+                }}
+                className="w-2 h-8 rounded-full origin-bottom"
+                style={{
+                  background: `linear-gradient(to top, var(--warning) 0%, color-mix(in srgb, var(--warning) 40%, transparent) 100%)`
+                }}
+              />
             ))}
-            {sideFlow.warming.count > 12 && (
-              <span className="text-xs text-slate-500">+{sideFlow.warming.count - 12}</span>
+            {sideFlow.warming.count > 20 && (
+              <div className="flex items-center justify-center h-8 px-3 text-xs font-bold text-[var(--warning)] bg-[var(--warning)]/15 rounded-lg">
+                +{sideFlow.warming.count - 20}
+              </div>
             )}
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   )
+}
+
+// Helper function for class names
+function cn(...classes: (string | undefined | null | boolean)[]) {
+  return classes.filter(Boolean).join(' ')
 }

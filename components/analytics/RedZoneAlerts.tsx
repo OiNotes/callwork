@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface Alert {
     id: string
@@ -21,111 +21,84 @@ export function RedZoneAlerts({ alerts }: RedZoneAlertsProps) {
 
     if (alerts.length === 0) return null
 
-    // 1. Group alerts by Manager
-    const groupedAlerts = alerts.reduce((acc, alert) => {
-        const key = alert.managerName || 'General'
-        if (!acc[key]) {
-            acc[key] = {
-                managerName: alert.managerName,
-                alerts: [],
-                hasCritical: false
-            }
-        }
-
-        // Deduplicate: Check if an alert with the same title already exists in this group
-        const exists = acc[key].alerts.some(a => a.title === alert.title)
-        if (!exists) {
-            acc[key].alerts.push(alert)
-            if (alert.type === 'critical') acc[key].hasCritical = true
-        }
-
-        return acc
-    }, {} as Record<string, { managerName?: string; alerts: Alert[]; hasCritical: boolean }>)
-
-    // 2. Sort groups: Critical first, then by number of alerts
-    const sortedGroups = Object.values(groupedAlerts).sort((a, b) => {
-        if (a.hasCritical && !b.hasCritical) return -1
-        if (!a.hasCritical && b.hasCritical) return 1
-        return b.alerts.length - a.alerts.length
+    // Sort: Critical first
+    const sortedAlerts = [...alerts].sort((a, b) => {
+        if (a.type === 'critical' && b.type !== 'critical') return -1
+        if (a.type !== 'critical' && b.type === 'critical') return 1
+        return 0
     })
 
-    // 3. Separate into visible and hidden
-    const VISIBLE_COUNT = 3
-    const visibleGroups = isExpanded ? sortedGroups : sortedGroups.slice(0, VISIBLE_COUNT)
-    const hiddenCount = sortedGroups.length - VISIBLE_COUNT
+    const visibleAlerts = isExpanded ? sortedAlerts : sortedAlerts.slice(0, 3)
+    const hiddenCount = sortedAlerts.length - 3
+
+    // Helper to format description with bold text
+    const formatDescription = (desc: string) => {
+        const parts = desc.split(/(\d+(?:\.\d+)?%|Норма: \d+(?:\.\d+)?%)/g)
+        return parts.map((part, i) => {
+            if (part.match(/(\d+(?:\.\d+)?%|Норма: \d+(?:\.\d+)?%)/)) {
+                return <b key={i} className="font-bold text-[var(--foreground)]">{part}</b>
+            }
+            return part
+        })
+    }
 
     return (
         <div className="space-y-4 mb-8">
-            <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-8 bg-red-500 rounded-full" />
-                <h2 className="text-xl font-bold text-[var(--foreground)]">Точки внимания</h2>
+            <div className="flex items-center justify-between">
+               <h2 className="text-lg font-bold text-[var(--foreground)]">Точки внимания</h2>
+               {sortedAlerts.length > 3 && (
+                   <button 
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="text-xs font-medium text-[var(--primary)] hover:underline flex items-center gap-1"
+                   >
+                      {isExpanded ? 'Свернуть' : `Показать еще ${hiddenCount}`}
+                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                   </button>
+               )}
             </div>
-
-            <div className="grid gap-3">
-                {visibleGroups.map((group, index) => (
-                    <motion.div
-                        key={group.managerName || 'general'}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className={`
-              p-4 rounded-lg border-l-4 shadow-sm
-              ${group.hasCritical
-                                ? 'bg-[var(--danger)]/10 border-l-[var(--danger)]'
-                                : 'bg-[var(--warning)]/10 border-l-[var(--warning)]'}
-            `}
-                    >
-                        <div className="flex items-start gap-4">
-                            <div className="mt-0.5">
-                                {group.hasCritical ? (
-                                    <AlertCircle className="w-5 h-5 text-[var(--danger)]" />
-                                ) : (
-                                    <AlertTriangle className="w-5 h-5 text-[var(--warning)]" />
-                                )}
+            
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1">
+                <AnimatePresence initial={false}>
+                    {visibleAlerts.map((alert) => (
+                        <motion.div
+                            key={alert.id}
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className={`
+                              relative pl-5 pr-4 py-3 rounded bg-[var(--card)] border border-[var(--border)] shadow-sm
+                              before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:rounded-l
+                              ${alert.type === 'critical' ? 'before:bg-[var(--danger)]' : ''}
+                              ${alert.type === 'warning' ? 'before:bg-[var(--warning)]' : ''}
+                              ${alert.type === 'info' ? 'before:bg-[var(--primary)]' : ''}
+                            `}
+                        >
+                            <div className="flex items-start gap-3">
+                               <div className="mt-0.5 shrink-0">
+                                  {alert.type === 'critical' && <AlertCircle className="w-4 h-4 text-[var(--danger)]" />}
+                                  {alert.type === 'warning' && <AlertTriangle className="w-4 h-4 text-[var(--warning)]" />}
+                                  {alert.type === 'info' && <Info className="w-4 h-4 text-[var(--primary)]" />}
+                               </div>
+                               <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                     {alert.managerName && (
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] bg-[var(--muted)] px-1.5 py-0.5 rounded">
+                                           {alert.managerName}
+                                        </span>
+                                     )}
+                                     <h4 className="text-sm font-bold text-[var(--foreground)]">
+                                        {alert.title.replace('Проблема на этапе ', '')}
+                                     </h4>
+                                  </div>
+                                  <p className="text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+                                     {formatDescription(alert.description)}
+                                  </p>
+                               </div>
                             </div>
-                            <div className="flex-1">
-                                <h4 className={`font-bold text-sm flex items-center gap-2 ${group.hasCritical ? 'text-[var(--danger)]' : 'text-[var(--foreground)]'}`}>
-                                    {group.managerName ? (
-                                        <span>{group.managerName}</span>
-                                    ) : (
-                                        <span>Общая проблема</span>
-                                    )}
-                                </h4>
-
-                                <div className="mt-1 space-y-1">
-                                    {group.alerts.map(alert => (
-                                        <div key={alert.id} className="text-sm opacity-90 flex items-start gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-current mt-1.5 shrink-0 opacity-50" />
-                                            <span>
-                                                <span className="font-medium">{alert.title.replace('Проблема на этапе ', '')}:</span> {alert.description}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                ))}
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
             </div>
-
-            {hiddenCount > 0 && (
-                <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="w-full py-2 flex items-center justify-center gap-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors bg-[var(--muted)]/20 rounded-lg hover:bg-[var(--muted)]/40"
-                >
-                    {isExpanded ? (
-                        <>
-                            <ChevronUp className="w-4 h-4" />
-                            Свернуть
-                        </>
-                    ) : (
-                        <>
-                            <ChevronDown className="w-4 h-4" />
-                            Показать еще {hiddenCount} {hiddenCount === 1 ? 'сотрудника' : 'сотрудников'}
-                        </>
-                    )}
-                </button>
-            )}
         </div>
     )
 }

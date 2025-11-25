@@ -246,6 +246,36 @@
     @apply bg-[var(--input)] border border-[var(--border)] rounded-[var(--radius-md)] px-4 py-3 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-all duration-200;
   }
 
+  /* Status Boxes - Адаптивные для Light/Dark тем */
+  .box-success {
+    @apply bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20 rounded-[var(--radius-md)] p-4;
+  }
+
+  .box-danger {
+    @apply bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20 rounded-[var(--radius-md)] p-4;
+  }
+
+  .box-warning {
+    @apply bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 rounded-[var(--radius-md)] p-4;
+  }
+
+  .box-info {
+    @apply bg-[var(--info)]/10 text-[var(--info)] border border-[var(--info)]/20 rounded-[var(--radius-md)] p-4;
+  }
+
+  /* Funnel Stage Glow Effects */
+  .funnel-glow-success {
+    box-shadow: 0 0 20px var(--success), 0 0 40px color-mix(in srgb, var(--success) 30%, transparent);
+  }
+
+  .funnel-glow-warning {
+    box-shadow: 0 0 20px var(--warning), 0 0 40px color-mix(in srgb, var(--warning) 30%, transparent);
+  }
+
+  .funnel-glow-danger {
+    box-shadow: 0 0 20px var(--danger), 0 0 40px color-mix(in srgb, var(--danger) 30%, transparent);
+  }
+
   /* Animations */
   .animate-fade-in {
     animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;

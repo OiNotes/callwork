@@ -5,10 +5,23 @@ import {
   resolveNorthStarStatus,
   type ConversionBenchmarkConfig,
 } from '@/lib/calculations/metrics'
+import Decimal from 'decimal.js'
 
-const round2 = (num: number) => Math.round(num * 100) / 100
+// Точное округление через Decimal.js (избегаем floating-point ошибок)
+const roundDecimal = (num: number, places: number = 2) =>
+  new Decimal(num).toDecimalPlaces(places, Decimal.ROUND_HALF_UP).toNumber()
+
 const getStageLabel = (id: FunnelStageId) => getLabelFromConfig(id)
-const safeRate = (value: number, base: number) => (base > 0 ? round2((value / base) * 100) : 0)
+
+// Безопасный расчёт процента через Decimal.js
+const safeRate = (value: number, base: number) => {
+  if (base <= 0) return 0
+  return new Decimal(value)
+    .dividedBy(base)
+    .times(100)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toNumber()
+}
 
 export interface RefusalBreakdown {
   stageId: FunnelStageId
@@ -148,8 +161,10 @@ export function formatNumber(num: number): string {
   return new Intl.NumberFormat('ru-RU').format(num)
 }
 
-export function formatPercent(num: number): string {
-  return `${round2(num).toFixed(2)}%`
+export function formatPercent(num: number, decimals: number = 1): string {
+  // Используем Decimal для точного округления (избегаем 30.819999999999993%)
+  const rounded = new Decimal(num).toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP)
+  return `${rounded.toFixed(decimals)}%`
 }
 
 export function getConversionColor(conversion: number, isRedZone: boolean): string {

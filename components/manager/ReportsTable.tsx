@@ -26,7 +26,7 @@ export const ReportsTable = memo(function ReportsTable({ reports }: ReportsTable
 
   if (reports.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
+      <div className="text-center py-12 text-[var(--muted-foreground)]">
         Нет отчётов за выбранный период
       </div>
     )
@@ -36,45 +36,45 @@ export const ReportsTable = memo(function ReportsTable({ reports }: ReportsTable
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="border-b">
-            <th className="text-left py-3 px-4 font-semibold text-sm text-gray-600">Дата</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Записаны</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">1-й Zoom</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">2-й Zoom</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Договор</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Дожим</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Оплаты</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Отказы</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">Продажи</th>
-            <th className="text-right py-3 px-4 font-semibold text-sm text-gray-600">KPI 1-й Zoom → Оплата</th>
+          <tr className="border-b border-[var(--border)]">
+            <th className="text-left py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Дата</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Записаны</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">1-й Zoom</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">2-й Zoom</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Договор</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Дожим</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Оплаты</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Отказы</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Продажи</th>
+            <th className="text-right py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">KPI 1-й Zoom → Оплата</th>
           </tr>
         </thead>
         <tbody>
           {reports.map((report) => {
             const kpi = calculateConversion(report.successfulDeals, report.pzmConducted)
             return (
-              <tr key={report.id} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="py-3 px-4 text-sm">{formatDate(report.date)}</td>
-                <td className="py-3 px-4 text-sm text-right">{report.zoomAppointments}</td>
-                <td className="py-3 px-4 text-sm text-right font-semibold">{report.pzmConducted}</td>
-                <td className="py-3 px-4 text-sm text-right">{report.vzmConducted}</td>
-                <td className="py-3 px-4 text-sm text-right">{report.contractReviewCount ?? 0}</td>
-                <td className="py-3 px-4 text-sm text-right">{report.pushCount ?? 0}</td>
-                <td className="py-3 px-4 text-sm text-right font-semibold text-green-600">
+              <tr key={report.id} className="border-b border-[var(--border)] hover:bg-[var(--muted)] transition-colors">
+                <td className="py-3 px-4 text-sm text-[var(--foreground)]">{formatDate(report.date)}</td>
+                <td className="py-3 px-4 text-sm text-right text-[var(--foreground)]">{report.zoomAppointments}</td>
+                <td className="py-3 px-4 text-sm text-right font-semibold text-[var(--foreground)]">{report.pzmConducted}</td>
+                <td className="py-3 px-4 text-sm text-right text-[var(--foreground)]">{report.vzmConducted}</td>
+                <td className="py-3 px-4 text-sm text-right text-[var(--foreground)]">{report.contractReviewCount ?? 0}</td>
+                <td className="py-3 px-4 text-sm text-right text-[var(--foreground)]">{report.pushCount ?? 0}</td>
+                <td className="py-3 px-4 text-sm text-right font-semibold text-[var(--success)]">
                   {report.successfulDeals}
                 </td>
-                <td className="py-3 px-4 text-sm text-right">{report.refusalsCount ?? 0}</td>
-                <td className="py-3 px-4 text-sm text-right font-semibold">
+                <td className="py-3 px-4 text-sm text-right text-[var(--foreground)]">{report.refusalsCount ?? 0}</td>
+                <td className="py-3 px-4 text-sm text-right font-semibold text-[var(--foreground)]">
                   {formatMoney(report.monthlySalesAmount)}
                 </td>
                 <td className="py-3 px-4 text-sm text-right">
                   <span
-                    className={`inline-block px-2 py-1 rounded ${
+                    className={`inline-block px-2 py-1 rounded-[var(--radius-sm)] ${
                       kpi >= 5
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-[var(--success)]/10 text-[var(--success)]'
                         : kpi >= 3
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-red-100 text-red-700'
+                        ? 'bg-[var(--warning)]/10 text-[var(--warning)]'
+                        : 'bg-[var(--danger)]/10 text-[var(--danger)]'
                     }`}
                   >
                     {kpi}%

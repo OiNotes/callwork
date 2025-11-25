@@ -191,7 +191,7 @@ export function getFunnelData(
       conversion: stage.id === 'zoomBooked' ? 100 : conversion,
       benchmark,
       isRedZone: stage.id === 'zoomBooked' ? false : conversion < benchmark,
-      dropOff: prevValue ? Math.max(0, 100 - conversion) : 0,
+      dropOff: prevValue ? Number((Math.max(0, 100 - conversion)).toFixed(1)) : 0,
     }
   })
 }

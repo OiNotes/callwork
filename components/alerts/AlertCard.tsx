@@ -27,28 +27,28 @@ export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
     switch (severity) {
       case 'CRITICAL':
         return {
-          bg: 'from-red-50 to-red-100',
-          border: 'border-red-500',
+          bg: 'bg-[var(--danger)]/10',
+          border: 'border-[var(--danger)]',
           icon: AlertTriangle,
-          iconBg: 'bg-red-500',
-          textColor: 'text-red-900'
+          iconBg: 'bg-[var(--danger)]',
+          textColor: 'text-[var(--danger)]'
         }
       case 'WARNING':
         return {
-          bg: 'from-orange-50 to-orange-100',
-          border: 'border-orange-500',
+          bg: 'bg-[var(--warning)]/10',
+          border: 'border-[var(--warning)]',
           icon: AlertCircle,
-          iconBg: 'bg-orange-500',
-          textColor: 'text-orange-900'
+          iconBg: 'bg-[var(--warning)]',
+          textColor: 'text-[var(--warning)]'
         }
       case 'INFO':
       default:
         return {
-          bg: 'from-blue-50 to-blue-100',
-          border: 'border-blue-500',
+          bg: 'bg-[var(--info)]/10',
+          border: 'border-[var(--info)]',
           icon: Info,
-          iconBg: 'bg-blue-500',
-          textColor: 'text-blue-900'
+          iconBg: 'bg-[var(--info)]',
+          textColor: 'text-[var(--info)]'
         }
     }
   }
@@ -74,7 +74,7 @@ export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: alert.isRead ? 0.6 : 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`p-6 rounded-2xl border-2 ${config.border} bg-gradient-to-br ${config.bg} ${
+      className={`p-6 rounded-[var(--radius-lg)] border-2 ${config.border} ${config.bg} ${
         alert.isRead ? 'opacity-60' : ''
       }`}
     >
@@ -90,33 +90,33 @@ export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
                 {alert.title}
               </h3>
               {alert.user && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Сотрудник: <strong>{alert.user.name}</strong>
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                  Сотрудник: <strong className="text-[var(--foreground)]">{alert.user.name}</strong>
                 </p>
               )}
             </div>
-            
+
             {!alert.isRead && (
               <button
                 onClick={() => onMarkRead(alert.id)}
-                className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+                className="p-2 hover:bg-[var(--muted)] rounded-lg transition-colors"
                 aria-label="Пометить как прочитанное"
               >
-                <X className="w-5 h-5 text-gray-600" />
+                <X className="w-5 h-5 text-[var(--muted-foreground)]" />
               </button>
             )}
           </div>
 
-          <p className="text-gray-700 mb-3">{alert.description}</p>
+          <p className="text-[var(--foreground)] mb-3">{alert.description}</p>
 
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)]">
             <span>{formatDate(alert.createdAt)}</span>
-            <span className="w-1 h-1 bg-gray-400 rounded-full" />
+            <span className="w-1 h-1 bg-[var(--border)] rounded-full" />
             <span className="uppercase font-medium">{alert.type.replace('_', ' ')}</span>
             {alert.isRead && (
               <>
-                <span className="w-1 h-1 bg-gray-400 rounded-full" />
-                <span className="text-gray-400">Прочитано</span>
+                <span className="w-1 h-1 bg-[var(--border)] rounded-full" />
+                <span className="text-[var(--muted-foreground)]">Прочитано</span>
               </>
             )}
           </div>

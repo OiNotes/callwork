@@ -8,9 +8,9 @@ interface MetricBadgeProps {
 
 export const MetricBadge = memo(function MetricBadge({ label, value, isGood }: MetricBadgeProps) {
   return (
-    <div className={`p-2 rounded-lg ${isGood ? 'bg-green-50' : 'bg-red-50'}`}>
-      <p className="text-xs text-gray-600">{label}</p>
-      <p className={`text-lg font-semibold ${isGood ? 'text-green-600' : 'text-red-600'}`}>
+    <div className={`p-2 rounded-[var(--radius-md)] ${isGood ? 'bg-[var(--success)]/10' : 'bg-[var(--danger)]/10'}`}>
+      <p className="text-xs text-[var(--muted-foreground)]">{label}</p>
+      <p className={`text-lg font-semibold ${isGood ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
         {value}
       </p>
     </div>
