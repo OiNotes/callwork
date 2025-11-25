@@ -28,7 +28,22 @@ const createReportSchema = z.object({
   successfulDeals: z.number().int().min(0),
   monthlySalesAmount: z.number().min(0),
   comment: z.string().optional(),
-})
+}).refine(
+  (data) => {
+    // Валидация воронки: каждый следующий этап не может превышать предыдущий
+    // zoomAppointments (booked) >= pzmConducted (zoom1) >= vzmConducted (zoom2)
+    // >= contractReviewCount >= pushCount >= successfulDeals
+    if (data.pzmConducted > data.zoomAppointments) return false
+    if (data.vzmConducted > data.pzmConducted) return false
+    if (data.contractReviewCount > data.vzmConducted) return false
+    if (data.pushCount > data.contractReviewCount) return false
+    if (data.successfulDeals > data.pushCount) return false
+    return true
+  },
+  {
+    message: 'Funnel validation failed: each stage cannot exceed the previous stage',
+  }
+)
 
 export async function GET(req: Request) {
   try {
@@ -75,39 +90,43 @@ export async function POST(req: Request) {
     
     const data = createReportSchema.parse(body)
 
-    const existingReport = await prisma.report.findUnique({
-      where: {
-        userId_date: {
-          userId: user.id,
-          date: new Date(data.date),
+    // Используем транзакцию для атомарной проверки и создания
+    // Предотвращает race condition между проверкой и созданием
+    const reportDate = new Date(data.date)
+
+    const report = await prisma.$transaction(async (tx) => {
+      // Проверяем существование внутри транзакции
+      const existingReport = await tx.report.findUnique({
+        where: {
+          userId_date: {
+            userId: user.id,
+            date: reportDate,
+          },
         },
-      },
-    })
+      })
 
-    if (existingReport) {
-      return NextResponse.json(
-        { error: 'Report for this date already exists' },
-        { status: 400 }
-      )
-    }
+      if (existingReport) {
+        throw new Error('REPORT_EXISTS')
+      }
 
-    const report = await prisma.report.create({
-      data: {
-        userId: user.id,
-        date: new Date(data.date),
-        zoomAppointments: data.zoomAppointments,
-        pzmConducted: data.pzmConducted,
-        refusalsCount: data.refusalsCount,
-        refusalsReasons: data.refusalsReasons,
-        refusalsByStage: data.refusalsByStage || undefined,
-        warmingUpCount: data.warmingUpCount,
-        vzmConducted: data.vzmConducted,
-        contractReviewCount: data.contractReviewCount,
-        pushCount: data.pushCount,
-        successfulDeals: data.successfulDeals,
-        monthlySalesAmount: new Decimal(data.monthlySalesAmount),
-        comment: data.comment,
-      },
+      return tx.report.create({
+        data: {
+          userId: user.id,
+          date: reportDate,
+          zoomAppointments: data.zoomAppointments,
+          pzmConducted: data.pzmConducted,
+          refusalsCount: data.refusalsCount,
+          refusalsReasons: data.refusalsReasons,
+          refusalsByStage: data.refusalsByStage || undefined,
+          warmingUpCount: data.warmingUpCount,
+          vzmConducted: data.vzmConducted,
+          contractReviewCount: data.contractReviewCount,
+          pushCount: data.pushCount,
+          successfulDeals: data.successfulDeals,
+          monthlySalesAmount: new Decimal(data.monthlySalesAmount),
+          comment: data.comment,
+        },
+      })
     })
 
     // Broadcast сделки в реальном времени если есть успешные сделки
@@ -138,6 +157,14 @@ export async function POST(req: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues },
+        { status: 400 }
+      )
+    }
+
+    // Обработка ошибки дубликата отчёта из транзакции
+    if (error instanceof Error && error.message === 'REPORT_EXISTS') {
+      return NextResponse.json(
+        { error: 'Report for this date already exists' },
         { status: 400 }
       )
     }

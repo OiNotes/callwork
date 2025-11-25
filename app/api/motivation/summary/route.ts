@@ -69,9 +69,18 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error('GET /api/motivation/summary error', error)
+
+    // Различаем типы ошибок - не скрываем реальную причину
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
     )
   }
 }

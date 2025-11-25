@@ -1,5 +1,6 @@
 import { CONVERSION_BENCHMARKS, FUNNEL_STAGES, KPI_BENCHMARKS } from '@/lib/config/metrics'
 import type { FunnelStageId } from '@/lib/config/conversionBenchmarks'
+import { round2, safeRate } from '@/lib/utils/decimal'
 
 export interface StageConversion {
   id: FunnelStageId
@@ -27,8 +28,7 @@ export interface ConversionsResult {
 
 export type ConversionBenchmarkConfig = typeof CONVERSION_BENCHMARKS
 
-const round2 = (num: number) => Math.round(num * 100) / 100
-const safeRate = (value: number, base: number) => (base > 0 ? round2((value / base) * 100) : 0)
+// round2 и safeRate импортированы из @/lib/utils/decimal для точных Decimal вычислений
 
 export function computeConversions(
   totals: ConversionTotals,

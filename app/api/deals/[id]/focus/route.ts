@@ -30,12 +30,21 @@ export async function PATCH(
 
     // Allow if:
     // - User is the deal owner
-    // - User is a MANAGER (managers can edit anyone's deals usually, or check hierarchy)
+    // - User is a MANAGER and deal belongs to their team member
     const isOwner = deal.managerId === session.user.id
-    const isManager = session.user.role === 'MANAGER'
 
-    if (!isOwner && !isManager) {
-        return new NextResponse('Forbidden', { status: 403 })
+    let hasTeamAccess = false
+    if (session.user.role === 'MANAGER' && !isOwner) {
+      // Проверяем что владелец сделки - сотрудник этого менеджера
+      const dealOwner = await prisma.user.findUnique({
+        where: { id: deal.managerId },
+        select: { managerId: true }
+      })
+      hasTeamAccess = dealOwner?.managerId === session.user.id
+    }
+
+    if (!isOwner && !hasTeamAccess) {
+      return new NextResponse('Forbidden', { status: 403 })
     }
 
     // 2. Update

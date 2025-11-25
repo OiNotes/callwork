@@ -2,6 +2,11 @@ import { prisma } from '@/lib/prisma'
 import { CONVERSION_BENCHMARKS } from '@/lib/config/conversionBenchmarks'
 import { KPI_BENCHMARKS, PLAN_HEURISTICS } from '@/lib/config/metrics'
 import { MOTIVATION_GRADE_PRESETS, type MotivationGradeConfig } from '@/lib/config/motivationGrades'
+import {
+  parseConversionBenchmarks,
+  parseAlertThresholds,
+  parseMotivationGrades,
+} from '@/lib/schemas/ropSettings'
 
 export type ConversionBenchmarkConfig = typeof CONVERSION_BENCHMARKS
 
@@ -52,22 +57,22 @@ export class RopSettingsService {
 
     const settings = managerScoped ?? globalSettings
 
+    // Используем safe parse с валидацией через Zod схемы
+    const parsedBenchmarks = parseConversionBenchmarks(settings?.conversionBenchmarks)
     const conversionBenchmarks: ConversionBenchmarkConfig = {
       ...CONVERSION_BENCHMARKS,
-      ...((settings?.conversionBenchmarks as Partial<ConversionBenchmarkConfig> | undefined) ?? {}),
+      ...(parsedBenchmarks ?? {}),
     }
 
+    const parsedThresholds = parseAlertThresholds(settings?.alertThresholds)
     const alertThresholds: AlertThresholdConfig = {
       ...DEFAULT_ALERT_THRESHOLDS,
-      ...((settings?.alertThresholds as Partial<AlertThresholdConfig> | undefined) ?? {}),
+      ...(parsedThresholds ?? {}),
     }
 
-    const gradesFromDb = settings?.motivationGrades as any
-    const motivationGrades = Array.isArray(gradesFromDb)
-      ? (gradesFromDb as MotivationGradeConfig[])
-      : Array.isArray(gradesFromDb?.grades)
-      ? (gradesFromDb.grades as MotivationGradeConfig[])
-      : MOTIVATION_GRADE_PRESETS
+    // Safe parse для motivationGrades (поддержка legacy формата { grades: [...] })
+    const parsedGrades = parseMotivationGrades(settings?.motivationGrades)
+    const motivationGrades: MotivationGradeConfig[] = parsedGrades ?? MOTIVATION_GRADE_PRESETS
 
     return {
       departmentGoal: settings?.departmentGoal ? Number(settings.departmentGoal) : null,

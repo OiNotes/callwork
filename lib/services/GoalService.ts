@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { RopSettingsService } from '@/lib/services/RopSettingsService'
+import { toDecimal, sumDecimals, toNumber } from '@/lib/utils/decimal'
 
 /**
  * GoalService - единый источник данных для целей продаж
@@ -18,7 +19,7 @@ export class GoalService {
       select: { monthlyGoal: true }
     })
 
-    return Number(user?.monthlyGoal || 0)
+    return toNumber(toDecimal(user?.monthlyGoal))
   }
 
   /**
@@ -45,7 +46,7 @@ export class GoalService {
       select: { monthlyGoal: true }
     })
 
-    return team.reduce((sum, user) => sum + Number(user.monthlyGoal || 0), 0)
+    return toNumber(sumDecimals(team.map(u => u.monthlyGoal)))
   }
 
   /**
@@ -80,8 +81,8 @@ export class GoalService {
       }
     })
 
-    const totalGoal = team.reduce((sum, user) => sum + Number(user.monthlyGoal || 0), 0)
-    const usersWithGoals = team.filter(user => user.monthlyGoal && Number(user.monthlyGoal) > 0)
+    const totalGoal = toNumber(sumDecimals(team.map(u => u.monthlyGoal)))
+    const usersWithGoals = team.filter(user => toDecimal(user.monthlyGoal).greaterThan(0))
 
     return {
       totalGoal,
@@ -92,7 +93,7 @@ export class GoalService {
         id: user.id,
         name: user.name,
         role: user.role,
-        goal: Number(user.monthlyGoal || 0)
+        goal: toNumber(toDecimal(user.monthlyGoal))
       }))
     }
   }

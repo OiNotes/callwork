@@ -1,7 +1,7 @@
 ---
 name: financial-bug-fixer
 description: Используй ПРОАКТИВНО когда тесты падают, возникают ошибки или баги в финансовой логике. Специализируется на диагностике decimal precision проблем, несоответствии валют, ошибках в расчётах.
-model: sonnet
+model: opus
 tools:
   - Read
   - Edit

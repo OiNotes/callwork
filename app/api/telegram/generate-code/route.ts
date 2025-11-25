@@ -2,10 +2,18 @@ import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
+import { rateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function POST() {
   try {
     const user = await requireAuth()
+
+    // Rate limiting: 3 попытки за 5 минут по userId
+    const rateLimitKey = `telegramCode:${user.id}`
+    const rateLimitResult = rateLimiter.isRateLimited(rateLimitKey, RATE_LIMITS.telegramCode)
+    if (rateLimitResult.limited) {
+      return rateLimitResponse(rateLimitResult.resetAt)
+    }
 
     // Генерация 6-значного кода
     const code = crypto.randomInt(100000, 999999).toString()

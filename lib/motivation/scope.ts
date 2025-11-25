@@ -14,18 +14,7 @@ export async function resolveAccessibleManagerIds(
     return [user.id]
   }
 
-  if (requestedId === 'all') {
-    const employees = await prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true },
-    })
-    return employees.map((e) => e.id)
-  }
-
-  if (requestedId) {
-    return [requestedId]
-  }
-
+  // Получаем команду менеджера (он сам + его сотрудники)
   const team = await prisma.user.findMany({
     where: {
       isActive: true,
@@ -37,9 +26,19 @@ export async function resolveAccessibleManagerIds(
     select: { id: true },
   })
 
-  if (team.length === 0) {
-    return [user.id]
+  const teamIds = team.length > 0 ? team.map((member) => member.id) : [user.id]
+
+  // 'all' = вся команда менеджера (НЕ все пользователи системы!)
+  if (requestedId === 'all' || !requestedId) {
+    return teamIds
   }
 
-  return team.map((member) => member.id)
+  // Конкретный ID: проверяем что пользователь входит в команду менеджера
+  if (teamIds.includes(requestedId)) {
+    return [requestedId]
+  }
+
+  // Запрошен пользователь вне команды - возвращаем только самого менеджера
+  // (безопасный fallback вместо утечки данных)
+  return [user.id]
 }

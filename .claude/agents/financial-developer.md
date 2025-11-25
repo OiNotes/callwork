@@ -1,8 +1,8 @@
 ---
 name: financial-developer
 description: Используй ПРОАКТИВНО для реализации финансовых фичей (API, компоненты, сервисы). Специализируется на Decimal.js, точных расчётах, TDD подходе. ОБЯЗАТЕЛЬНО используй когда нужно писать код для финансовых операций.
-tools: 
-model: sonnet
+tools:
+model: opus
 ---
 
 # Financial Code Developer

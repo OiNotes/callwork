@@ -1,7 +1,7 @@
 ---
 name: financial-architect
 description: Используй ПРОАКТИВНО для новых финансовых фичей, крупных рефакторингов или API дизайна. Создаёт Architecture Decision Records (ADR) и high-level system design. READ-ONLY - не пишет код реализации.
-model: sonnet
+model: opus
 tools:
   - Read
   - Grep

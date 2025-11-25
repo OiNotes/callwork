@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastActivity } from '../../sse/activities/route'
+import crypto from 'crypto'
+
+/**
+ * Timing-safe сравнение Bearer token для защиты от timing attacks
+ */
+function verifyBearerToken(authHeader: string | null, secret: string | undefined): boolean {
+  if (!authHeader || !secret) return false
+
+  const prefix = 'Bearer '
+  if (!authHeader.startsWith(prefix)) return false
+
+  const providedToken = authHeader.slice(prefix.length)
+
+  // Выравниваем буферы до одинаковой длины для timingSafeEqual
+  const providedBuffer = Buffer.from(providedToken.padEnd(64, '\0'))
+  const expectedBuffer = Buffer.from(secret.padEnd(64, '\0'))
+
+  return crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+}
 
 export async function GET(request: NextRequest) {
-  // Проверка авторизации (Vercel Cron Secret)
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Проверка авторизации с timing-safe сравнением
+  if (!verifyBearerToken(request.headers.get('authorization'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

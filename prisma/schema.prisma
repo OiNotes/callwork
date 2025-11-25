@@ -57,7 +57,7 @@ model User {
   deals        Deal[]
   alerts       Alert[] /// Связь с алертами
   managedUsers User[]   @relation("ManagerToEmployees")
-  manager      User?    @relation("ManagerToEmployees", fields: [managerId], references: [id])
+  manager      User?    @relation("ManagerToEmployees", fields: [managerId], references: [id], onDelete: SetNull)
   managerId    String?
   ropSettings  RopSettings?
 
