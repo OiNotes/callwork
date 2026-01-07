@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import { calculateMonthlyForecast, generateForecastChartData } from '@/lib/calculations/forecast'
 import { GoalService } from '@/lib/services/GoalService'
+import { roundMoney, sumDecimals, toDecimal, toNumber } from '@/lib/utils/decimal'
+import { z } from 'zod'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 /**
  * GET /api/analytics/forecast
@@ -14,48 +17,65 @@ import { GoalService } from '@/lib/services/GoalService'
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Получить пользователя
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, role: true, monthlyGoal: true }
-    })
-
-    if (!currentUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+    const currentUser = await requireAuth()
 
     const { searchParams } = new URL(request.url)
-    const userIdParam = searchParams.get('userId')
-    const monthParam = searchParams.get('month')
+    const querySchema = z.object({
+      userId: z.string().cuid().optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    })
+    const parsedQuery = querySchema.safeParse({
+      userId: searchParams.get('userId') ?? undefined,
+      month: searchParams.get('month') ?? undefined,
+    })
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: parsedQuery.error.issues }, { status: 400 })
+    }
+    const { userId: userIdParam, month: monthParam } = parsedQuery.data
 
     // Определить пользователя для анализа
     let targetUserId = currentUser.id
     
     if (userIdParam) {
-      // Менеджер может смотреть прогноз своих сотрудников
-      if (currentUser.role === 'MANAGER') {
-        targetUserId = userIdParam
-      } else {
+      if (currentUser.role !== 'MANAGER' && currentUser.role !== 'ADMIN') {
         return NextResponse.json(
           { error: 'Forbidden: only managers can view other users\' forecasts' },
           { status: 403 }
         )
       }
+      if (currentUser.role === 'MANAGER') {
+        const targetUser = await prisma.user.findFirst({
+          where: {
+            id: userIdParam,
+            isActive: true,
+            OR: [{ managerId: currentUser.id }, { id: currentUser.id }],
+          },
+          select: { id: true },
+        })
+        if (!targetUser) {
+          return NextResponse.json({ error: 'Forbidden: Cannot access other users\' forecasts' }, { status: 403 })
+        }
+        targetUserId = userIdParam
+      } else {
+        const targetUser = await prisma.user.findFirst({
+          where: { id: userIdParam, isActive: true },
+          select: { id: true },
+        })
+        if (!targetUser) {
+          return NextResponse.json({ error: 'Forbidden: Cannot access other users\' forecasts' }, { status: 403 })
+        }
+        targetUserId = userIdParam
+      }
     }
 
     // Получить данные пользователя
-    const targetUser = await prisma.user.findUnique({
-      where: { id: targetUserId },
+    const targetUser = await prisma.user.findFirst({
+      where: { id: targetUserId, isActive: true },
       select: {
         id: true,
         name: true,
-        role: true
-      }
+        role: true,
+      },
     })
 
     if (!targetUser) {
@@ -66,11 +86,14 @@ export async function GET(request: NextRequest) {
     const monthlyGoal = await GoalService.getUserGoal(targetUserId)
 
     // Если нет цели - вернуть ошибку
-    if (monthlyGoal === 0) {
-      return NextResponse.json({
-        error: 'Monthly goal not set',
-        message: 'Пользователь не имеет установленной месячной цели'
-      }, { status: 400 })
+    if (monthlyGoal === null) {
+      return jsonWithPrivateCache({
+        goalMissing: true,
+        current: 0,
+        projected: 0,
+        progress: 0,
+        message: 'Установите месячную цель в настройках'
+      })
     }
 
     // Определить период (текущий месяц или указанный)
@@ -105,10 +128,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Рассчитать текущую сумму продаж
-    const currentSales = reports.reduce(
-      (sum, report) => sum + Number(report.monthlySalesAmount),
-      0
-    )
+    const currentSales = toNumber(roundMoney(sumDecimals(reports.map((r) => r.monthlySalesAmount))))
 
     // Рассчитать прогноз
     const forecast = calculateMonthlyForecast(currentSales, monthlyGoal)
@@ -116,12 +136,12 @@ export async function GET(request: NextRequest) {
     // Подготовить данные по дням для графика
     const dailySales = reports.map(report => ({
       day: report.date.getDate(),
-      sales: Number(report.monthlySalesAmount)
+      sales: toNumber(toDecimal(report.monthlySalesAmount))
     }))
 
     const chartData = generateForecastChartData(currentSales, monthlyGoal, dailySales)
 
-    return NextResponse.json({
+    return jsonWithPrivateCache({
       user: {
         id: targetUser.id,
         name: targetUser.name,
@@ -137,7 +157,10 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Forecast API error:', error)
+    logError('Forecast API error', error)
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

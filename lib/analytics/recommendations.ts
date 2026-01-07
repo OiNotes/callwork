@@ -86,21 +86,21 @@ export function analyzeRedZones(
 export function getSeverityColor(severity: RedZone['severity']): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-50 border-red-200'
+      return 'bg-[var(--danger)]/10 border-[var(--danger)]/25'
     case 'warning':
-      return 'bg-yellow-50 border-yellow-200'
+      return 'bg-[var(--warning)]/10 border-[var(--warning)]/25'
     case 'ok':
-      return 'bg-green-50 border-green-200'
+      return 'bg-[var(--success)]/10 border-[var(--success)]/25'
   }
 }
 
 export function getSeverityIcon(severity: RedZone['severity']): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-500 text-white'
+      return 'bg-[var(--danger)] text-[var(--status-foreground)]'
     case 'warning':
-      return 'bg-yellow-500 text-white'
+      return 'bg-[var(--warning)] text-[var(--status-foreground)]'
     case 'ok':
-      return 'bg-green-500 text-white'
+      return 'bg-[var(--success)] text-[var(--status-foreground)]'
   }
 }

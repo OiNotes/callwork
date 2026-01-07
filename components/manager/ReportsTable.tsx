@@ -2,6 +2,8 @@
 
 import { memo } from 'react'
 import { formatDate, formatMoney } from '@/lib/utils/format'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { FileText } from 'lucide-react'
 
 interface Report {
   id: string
@@ -26,15 +28,19 @@ export const ReportsTable = memo(function ReportsTable({ reports }: ReportsTable
 
   if (reports.length === 0) {
     return (
-      <div className="text-center py-12 text-[var(--muted-foreground)]">
-        Нет отчётов за выбранный период
-      </div>
+      <EmptyState
+        title="Отчётов пока нет"
+        description="Сотрудники ещё не отправляли отчёты за выбранный период."
+        actionLabel="Открыть отчёты"
+        actionHref="/dashboard/report"
+        icon={<FileText className="w-6 h-6" />}
+      />
     )
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
+      <table className="w-full" aria-label="Отчёты сотрудников">
         <thead>
           <tr className="border-b border-[var(--border)]">
             <th className="text-left py-3 px-4 font-semibold text-sm text-[var(--muted-foreground)]">Дата</th>

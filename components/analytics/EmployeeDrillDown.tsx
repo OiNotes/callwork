@@ -1,7 +1,7 @@
 'use client'
 
-import { memo, useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { memo, useState, useMemo, useCallback } from 'react'
+import { motion, AnimatePresence } from '@/lib/motion'
 import { X, TrendingUp, TrendingDown, Award, AlertTriangle, Users, Filter } from 'lucide-react'
 
 interface EmployeeConversion {
@@ -65,6 +65,19 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
   onClose
 }: EmployeeDrillDownProps) {
   const [filter, setFilter] = useState<FilterType>('all')
+  const handleOverlayClick = useCallback(() => {
+    onClose()
+  }, [onClose])
+
+  const handleModalClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+  }, [])
+
+  const handleFilterClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const value = event.currentTarget.dataset.filter as FilterType | undefined
+    if (!value) return
+    setFilter(value)
+  }, [])
 
   // Фильтрация сотрудников по выбранному этапу
   const stageEmployees = useMemo(() => {
@@ -96,9 +109,13 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
 
   const getPerformanceBadge = (conversionRate: number, avgRate: number) => {
     const diff = conversionRate - avgRate
-    if (diff > 10) return { icon: Award, color: 'text-[#34C759]', bg: 'bg-green-50', label: 'Топ' }
-    if (diff < -10) return { icon: AlertTriangle, color: 'text-[#FF3B30]', bg: 'bg-red-50', label: 'Низкий' }
-    return { icon: Users, color: 'text-[#007AFF]', bg: 'bg-blue-50', label: 'Средний' }
+    if (diff > 10) {
+      return { icon: Award, color: 'text-[var(--success)]', bg: 'bg-[var(--success)]/10', label: 'Топ' }
+    }
+    if (diff < -10) {
+      return { icon: AlertTriangle, color: 'text-[var(--danger)]', bg: 'bg-[var(--danger)]/10', label: 'Низкий' }
+    }
+    return { icon: Users, color: 'text-[var(--primary)]', bg: 'bg-[var(--primary)]/10', label: 'Средний' }
   }
 
   return (
@@ -108,70 +125,70 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
         initial="hidden"
         animate="visible"
         exit="hidden"
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={onClose}
+        className="fixed inset-0 bg-[var(--overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={handleOverlayClick}
       >
         <motion.div
           variants={modalVariants}
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
+          className="bg-[var(--card)] rounded-2xl shadow-2xl border border-[var(--border)] max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          onClick={handleModalClick}
         >
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-[#E5E5E7] px-8 py-6 z-10">
+          <div className="sticky top-0 bg-[var(--card)] border-b border-[var(--border)] px-8 py-6 z-10">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-semibold text-[#1D1D1F]">
+                <h2 className="text-2xl font-semibold text-[var(--foreground)]">
                   {stage.stage}
                 </h2>
-                <p className="text-sm text-[#86868B] mt-1">
+                <p className="text-sm text-[var(--muted-foreground)] mt-1">
                   Детализация по сотрудникам
                 </p>
               </div>
               <button
-                onClick={onClose}
-                className="w-10 h-10 rounded-full bg-[#F5F5F7] hover:bg-[#E5E5E7] flex items-center justify-center transition-colors duration-200"
+                onClick={handleOverlayClick}
+                className="w-10 h-10 rounded-full bg-[var(--secondary)] hover:bg-[var(--accent)] flex items-center justify-center transition-colors duration-200"
               >
-                <X className="w-5 h-5 text-[#86868B]" />
+                <X className="w-5 h-5 text-[var(--muted-foreground)]" />
               </button>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
+              <div className="bg-[var(--primary)]/10 rounded-xl p-4 border border-[var(--primary)]/15">
                 <div className="flex items-center gap-2 mb-1">
-                  <Users className="w-4 h-4 text-[#007AFF]" />
-                  <span className="text-xs font-medium text-[#007AFF]">
+                  <Users className="w-4 h-4 text-[var(--primary)]" />
+                  <span className="text-xs font-medium text-[var(--primary)]">
                     Сотрудников
                   </span>
                 </div>
-                <p className="text-2xl font-semibold text-[#1D1D1F]">
+                <p className="text-2xl font-semibold text-[var(--foreground)]">
                   {stats.totalEmployees}
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4">
+              <div className="bg-[var(--success)]/10 rounded-xl p-4 border border-[var(--success)]/15">
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-[#34C759]" />
-                  <span className="text-xs font-medium text-[#34C759]">
+                  <TrendingUp className="w-4 h-4 text-[var(--success)]" />
+                  <span className="text-xs font-medium text-[var(--success)]">
                     Средняя конверсия
                   </span>
                 </div>
-                <p className="text-2xl font-semibold text-[#1D1D1F]">
+                <p className="text-2xl font-semibold text-[var(--foreground)]">
                   {stats.avgConversion.toFixed(1)}%
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4">
+              <div className="bg-[var(--info)]/10 rounded-xl p-4 border border-[var(--info)]/15">
                 <div className="flex items-center gap-2 mb-1">
-                  <Award className="w-4 h-4 text-purple-600" />
-                  <span className="text-xs font-medium text-purple-600">
+                  <Award className="w-4 h-4 text-[var(--info)]" />
+                  <span className="text-xs font-medium text-[var(--info)]">
                     Лучший результат
                   </span>
                 </div>
-                <p className="text-sm font-semibold text-[#1D1D1F] truncate">
+                <p className="text-sm font-semibold text-[var(--foreground)] truncate">
                   {stats.topEmployee?.employee_name || 'Нет данных'}
                 </p>
               </div>
@@ -179,33 +196,36 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
 
             {/* Filters */}
             <div className="mt-4 flex items-center gap-2">
-              <Filter className="w-4 h-4 text-[#86868B]" />
+              <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
               <button
-                onClick={() => setFilter('all')}
+                data-filter="all"
+                onClick={handleFilterClick}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   filter === 'all'
-                    ? 'bg-[#007AFF] text-white shadow-md'
-                    : 'bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5E7]'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-md'
+                    : 'bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
                 }`}
               >
                 Все сотрудники
               </button>
               <button
-                onClick={() => setFilter('top3')}
+                data-filter="top3"
+                onClick={handleFilterClick}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   filter === 'top3'
-                    ? 'bg-[#34C759] text-white shadow-md'
-                    : 'bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5E7]'
+                    ? 'bg-[var(--success)] text-[var(--status-foreground)] shadow-md'
+                    : 'bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
                 }`}
               >
                 TOP-3
               </button>
               <button
-                onClick={() => setFilter('bottom3')}
+                data-filter="bottom3"
+                onClick={handleFilterClick}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   filter === 'bottom3'
-                    ? 'bg-[#FF3B30] text-white shadow-md'
-                    : 'bg-[#F5F5F7] text-[#86868B] hover:bg-[#E5E5E7]'
+                    ? 'bg-[var(--danger)] text-[var(--status-foreground)] shadow-md'
+                    : 'bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
                 }`}
               >
                 BOTTOM-3
@@ -217,8 +237,8 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
           <div className="px-8 py-6 overflow-y-auto max-h-[calc(90vh-320px)]">
             {filteredEmployees.length === 0 ? (
               <div className="text-center py-12">
-                <Users className="w-12 h-12 text-[#86868B] mx-auto mb-4" />
-                <p className="text-[#86868B]">Нет данных по сотрудникам</p>
+                <Users className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4" />
+                <p className="text-[var(--muted-foreground)]">Нет данных по сотрудникам</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -234,7 +254,7 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
                       variants={listItemVariants}
                       initial="hidden"
                       animate="visible"
-                      className="group relative bg-white border border-[#E5E5E7] rounded-xl p-5 hover:shadow-lg hover:border-[#007AFF] transition-all duration-200"
+                      className="group relative bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 hover:shadow-lg hover:border-[var(--primary)] transition-all duration-200"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1">
@@ -246,14 +266,14 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
                           {/* Employee Info */}
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-1">
-                              <h3 className="font-semibold text-[#1D1D1F]">
+                              <h3 className="font-semibold text-[var(--foreground)]">
                                 {employee.employee_name}
                               </h3>
                               <span className={`px-2 py-1 rounded-md text-xs font-medium ${badge.bg} ${badge.color}`}>
                                 {badge.label}
                               </span>
                             </div>
-                            <p className="text-sm text-[#86868B]">
+                            <p className="text-sm text-[var(--muted-foreground)]">
                               Обработал: {employee.count.toLocaleString('ru-RU')} обращений
                             </p>
                           </div>
@@ -262,21 +282,21 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
                         {/* Conversion Rate */}
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <p className="text-2xl font-semibold text-[#1D1D1F]">
+                            <p className="text-2xl font-semibold text-[var(--foreground)]">
                               {employee.conversion_rate.toFixed(1)}%
                             </p>
                             <div className="flex items-center gap-1 justify-end mt-1">
                               {isAboveAverage ? (
                                 <>
-                                  <TrendingUp className="w-4 h-4 text-[#34C759]" />
-                                  <span className="text-xs font-medium text-[#34C759]">
+                                  <TrendingUp className="w-4 h-4 text-[var(--success)]" />
+                                  <span className="text-xs font-medium text-[var(--success)]">
                                     +{(employee.conversion_rate - stats.avgConversion).toFixed(1)}%
                                   </span>
                                 </>
                               ) : (
                                 <>
-                                  <TrendingDown className="w-4 h-4 text-[#FF3B30]" />
-                                  <span className="text-xs font-medium text-[#FF3B30]">
+                                  <TrendingDown className="w-4 h-4 text-[var(--danger)]" />
+                                  <span className="text-xs font-medium text-[var(--danger)]">
                                     {(employee.conversion_rate - stats.avgConversion).toFixed(1)}%
                                   </span>
                                 </>
@@ -287,15 +307,15 @@ export const EmployeeDrillDown = memo(function EmployeeDrillDown({
                       </div>
 
                       {/* Progress Bar */}
-                      <div className="mt-4 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
+                      <div className="mt-4 h-2 bg-[var(--muted)]/40 rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${employee.conversion_rate}%` }}
                           transition={{ delay: index * 0.05 + 0.2, duration: 0.5 }}
                           className={`h-full rounded-full ${
                             employee.conversion_rate > stats.avgConversion
-                              ? 'bg-gradient-to-r from-[#34C759] to-[#30D158]'
-                              : 'bg-gradient-to-r from-[#FF3B30] to-[#FF453A]'
+                              ? 'bg-[var(--success)]'
+                              : 'bg-[var(--danger)]'
                           }`}
                         />
                       </div>

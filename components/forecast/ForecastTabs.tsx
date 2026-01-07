@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { useSession } from 'next-auth/react'
 
 export function ForecastTabs() {
   const pathname = usePathname()
   const { data: session } = useSession()
   
-  const isManager = session?.user?.role === 'MANAGER'
+  const isManager = session?.user?.role === 'MANAGER' || session?.user?.role === 'ADMIN'
 
   // Tabs configuration
   const tabs = [
@@ -39,7 +39,7 @@ export function ForecastTabs() {
             {isActive && (
               <motion.div
                 layoutId="active-forecast-tab"
-                className="absolute inset-0 bg-white shadow-sm rounded-lg border border-gray-200/50"
+                className="absolute inset-0 bg-[var(--card)] shadow-sm rounded-lg border border-[var(--border)]"
                 transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
               />
             )}

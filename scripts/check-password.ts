@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { resolvePasswordHash, resolvePasswordValue } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -15,24 +17,38 @@ async function main() {
   })
 
   if (!user) {
-    console.error('❌ User not found!')
+    logError('User not found')
     return
   }
 
   console.log(`User: ${user.name}`)
-  console.log(`Email: ${user.email}`)
-  console.log(`Password hash: ${user.password}\n`)
+  console.log(`Email: ${user.email}\n`)
 
   // Test password
-  const testPassword = 'password123'
+  const testPassword = resolvePasswordValue({
+    label: 'check password',
+    envVar: 'CHECK_PASSWORD',
+    fallbackEnvVar: 'SEED_PASSWORD',
+  })
   const isMatch = await bcrypt.compare(testPassword, user.password)
 
-  console.log(`Testing password: "${testPassword}"`)
   console.log(`Match: ${isMatch ? '✓ YES' : '✗ NO'}`)
 
   if (!isMatch) {
-    console.log('\n⚠️  Password mismatch! Resetting to "password123"...')
-    const hashedPassword = await bcrypt.hash('password123', 10)
+    const shouldReset = Boolean(process.env.RESET_PASSWORD || process.env.RESET_PASSWORD_HASH)
+    if (!shouldReset) {
+      console.log('Set RESET_PASSWORD or RESET_PASSWORD_HASH to reset the password.')
+      return
+    }
+
+    console.log('\n⚠️  Password mismatch! Resetting to RESET_PASSWORD...')
+    const hashedPassword = await resolvePasswordHash({
+      label: 'reset password',
+      envVar: 'RESET_PASSWORD',
+      hashEnvVar: 'RESET_PASSWORD_HASH',
+      fallbackEnvVar: 'CHECK_PASSWORD',
+      fallbackHashEnvVar: 'CHECK_PASSWORD_HASH',
+    })
     await prisma.user.update({
       where: { id: user.id },
       data: { password: hashedPassword }
@@ -42,5 +58,5 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => logError(error))
   .finally(() => prisma.$disconnect())

@@ -4,44 +4,108 @@ import { requireManager } from '@/lib/auth/get-session'
 import { calculateConversions } from '@/lib/analytics/conversions'
 import { calculateManagerStats } from '@/lib/analytics/funnel'
 import { getSettingsForUser } from '@/lib/settings/context'
+import { GoalService } from '@/lib/services/GoalService'
+import { z } from 'zod'
+import { buildPagination } from '@/lib/utils/pagination'
+import type { Prisma, Role } from '@prisma/client'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 export async function GET(request: Request) {
   try {
     const manager = await requireManager()
     const { searchParams } = new URL(request.url)
-    
-    const startDate = searchParams.get('startDate') 
-      ? new Date(searchParams.get('startDate')!) 
+
+    const querySchema = z.object({
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+      page: z.coerce.number().int().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+    })
+    const parsedQuery = querySchema.safeParse({
+      startDate: searchParams.get('startDate') ?? undefined,
+      endDate: searchParams.get('endDate') ?? undefined,
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+    })
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: parsedQuery.error.issues }, { status: 400 })
+    }
+
+    const startDate = parsedQuery.data.startDate
+      ? new Date(parsedQuery.data.startDate)
       : new Date(new Date().setMonth(new Date().getMonth() - 1))
-    const endDate = searchParams.get('endDate') 
-      ? new Date(searchParams.get('endDate')!) 
-      : new Date()
+    const endDate = parsedQuery.data.endDate ? new Date(parsedQuery.data.endDate) : new Date()
+    if (startDate > endDate) {
+      return NextResponse.json({ error: 'Invalid date range' }, { status: 400 })
+    }
 
     const { settings } = await getSettingsForUser(manager.id, manager.role)
+    const page = parsedQuery.data.page ?? 1
+    const limit = parsedQuery.data.limit ?? 50
+    const skip = (page - 1) * limit
     
-    // Получить всех работников менеджера
-    const employees = await prisma.user.findMany({
-      where: {
-        managerId: manager.id,
-        role: 'EMPLOYEE'
-      },
-      include: {
-        reports: {
-          where: {
-            date: {
-              gte: startDate,
-              lte: endDate
-            }
-          },
-          orderBy: { date: 'desc' }
+    const isAdmin = manager.role === 'ADMIN'
+
+    const employeesWhere: Prisma.UserWhereInput = isAdmin
+      ? {
+          role: 'EMPLOYEE' as Role,
+          isActive: true,
         }
-      }
-    })
+      : {
+          managerId: manager.id,
+          role: 'EMPLOYEE' as Role,
+          isActive: true,
+        }
+
+    const [employees, totalEmployees, allEmployeeIds] = await Promise.all([
+      prisma.user.findMany({
+        where: employeesWhere,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          reports: {
+            where: {
+              date: {
+                gte: startDate,
+                lte: endDate,
+              },
+            },
+            orderBy: { date: 'desc' },
+            select: {
+              id: true,
+              date: true,
+              zoomAppointments: true,
+              pzmConducted: true,
+              vzmConducted: true,
+              contractReviewCount: true,
+              pushCount: true,
+              successfulDeals: true,
+              monthlySalesAmount: true,
+              refusalsCount: true,
+              warmingUpCount: true,
+            },
+          },
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count({ where: employeesWhere }),
+      prisma.user.findMany({
+        where: employeesWhere,
+        select: { id: true },
+      }),
+    ])
+    const employeeGoals = await GoalService.getUsersGoals(employees.map((e) => e.id))
 
     // --- РАСЧЕТ ОБЩЕЙ СТАТИСТИКИ КОМАНДЫ (Менеджер + Сотрудники) ---
     
     // 1. Получаем отчеты всей команды (включая менеджера) для корректного факта
-    const teamUserIds = [manager.id, ...employees.map((e) => e.id)]
+    const teamUserIds = isAdmin
+      ? allEmployeeIds.map((e) => e.id)
+      : [manager.id, ...allEmployeeIds.map((e) => e.id)]
     const allTeamReports = await prisma.report.findMany({
       where: {
         userId: { in: teamUserIds },
@@ -93,6 +157,7 @@ export async function GET(request: Request) {
         const stats = await calculateManagerStats(employee.reports, employee.id, {
           salesPerDeal: settings.salesPerDeal,
           planMode: 'user',
+          planSalesOverride: employeeGoals[employee.id] ?? 0,
         })
         const conversions = calculateConversions(
           {
@@ -119,16 +184,20 @@ export async function GET(request: Request) {
       })
     )
     
-    return NextResponse.json({ 
-      employees: employeesWithStats,
-      teamStats, // Возвращаем общую статистику
+    return jsonWithPrivateCache({ 
+      data: employeesWithStats,
+      pagination: buildPagination(page, limit, totalEmployees),
+      teamStats,
       settings,
     })
   } catch (error) {
-    console.error('GET /api/employees error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 }
-    )
+    logError('GET /api/employees error', error)
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (error instanceof Error && error.message.includes('Manager access required')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

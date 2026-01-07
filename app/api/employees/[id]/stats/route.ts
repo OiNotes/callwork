@@ -1,31 +1,39 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth/get-session'
 import { calculateManagerStats } from '@/lib/analytics/funnel'
 import { calculateFullFunnel } from '@/lib/calculations/funnel'
 import { getDateRange } from '@/lib/analytics/conversions'
 import { getSettingsForUser } from '@/lib/settings/context'
+import { toDecimal, toNumber } from '@/lib/utils/decimal'
+import { z } from 'zod'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
-    const { id: employeeId } = await params
+
+    const { id: employeeId } = await context.params
+    const idResult = z.string().cuid().safeParse(employeeId)
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid employee id' }, { status: 400 })
+    }
     
     // Проверка прав: менеджер может смотреть своих работников, работник только себя
     if (user.role === 'EMPLOYEE' && user.id !== employeeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    if (user.role === 'MANAGER') {
-      const employee = await prisma.user.findUnique({
-        where: { id: employeeId },
+    if (user.role === 'MANAGER' && employeeId !== user.id) {
+      const employee = await prisma.user.findFirst({
+        where: { id: employeeId, isActive: true },
         select: { managerId: true }
       })
       
@@ -35,13 +43,17 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url)
-    const range = (searchParams.get('range') as 'week' | 'month' | 'quarter' | 'year') || 'month'
-    const { startDate, endDate } = getDateRange(range)
+    const rangeSchema = z.enum(['week', 'month', 'quarter', 'year'])
+    const rangeResult = rangeSchema.safeParse(searchParams.get('range') ?? 'month')
+    if (!rangeResult.success) {
+      return NextResponse.json({ error: rangeResult.error.issues }, { status: 400 })
+    }
+    const { startDate, endDate } = getDateRange(rangeResult.data)
     const { settings } = await getSettingsForUser(user.id, user.role)
     const benchmarks = settings.conversionBenchmarks
 
-    const employee = await prisma.user.findUnique({
-      where: { id: employeeId },
+    const employee = await prisma.user.findFirst({
+      where: { id: employeeId, isActive: true },
       select: { id: true, name: true, role: true, managerId: true },
     })
 
@@ -61,9 +73,13 @@ export async function GET(
       planMode: 'user',
     })
 
+    const teamScope = employee.managerId
+      ? { managerId: employee.managerId }
+      : { id: employee.id }
+
     const teamMembers = await prisma.user.findMany({
       where: {
-        managerId: employee.managerId,
+        ...teamScope,
         isActive: true,
         role: 'EMPLOYEE',
         NOT: { id: employeeId },
@@ -90,7 +106,9 @@ export async function GET(
       contractReview: Math.round(teamTotals.contractReview / teamCount),
       pushCount: Math.round(teamTotals.pushCount / teamCount),
       successfulDeals: Math.round(teamTotals.successfulDeals / teamCount),
-      salesAmount: Math.round(teamTotals.salesAmount / teamCount),
+      salesAmount: toNumber(
+        toDecimal(teamTotals.salesAmount).dividedBy(teamCount).toDecimalPlaces(0)
+      ),
     }
 
     const redZones = []
@@ -153,7 +171,7 @@ export async function GET(
       }
     )
 
-    return NextResponse.json({
+    return jsonWithPrivateCache({
       employee: {
         id: employee.id,
         name: employee.name,
@@ -163,7 +181,11 @@ export async function GET(
         ...employeeStats,
         avgCheck:
           employeeStats.successfulDeals > 0
-            ? Math.round(employeeStats.salesAmount / employeeStats.successfulDeals)
+            ? toNumber(
+                toDecimal(employeeStats.salesAmount)
+                  .dividedBy(employeeStats.successfulDeals)
+                  .toDecimalPlaces(0)
+              )
             : 0,
       },
       teamAverage: {
@@ -176,7 +198,11 @@ export async function GET(
         northStar: teamTotals.northStar,
         avgCheck:
           teamAverageCounts.successfulDeals > 0
-            ? Math.round(teamAverageCounts.salesAmount / teamAverageCounts.successfulDeals)
+            ? toNumber(
+                toDecimal(teamAverageCounts.salesAmount)
+                  .dividedBy(teamAverageCounts.successfulDeals)
+                  .toDecimalPlaces(0)
+              )
             : 0,
       },
       teamSize: teamMembers.length,
@@ -191,7 +217,7 @@ export async function GET(
       settings,
     })
   } catch (error) {
-    console.error('GET /api/employees/[id]/stats error:', error)
+    logError('GET /api/employees/[id]/stats error', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

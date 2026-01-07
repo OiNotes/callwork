@@ -6,7 +6,7 @@
 
 set -e
 
-PROJECT_DIR="/Users/sile/Documents/Status Stock 4.0/Call stat/callwork"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 echo "🚀 Запуск Callwork локально..."
@@ -24,7 +24,7 @@ if [ ! -f .env ]; then
     echo ""
     echo "Создайте файл .env со следующими переменными:"
     echo ""
-    echo "DATABASE_URL=\"postgresql://user:password@localhost:5432/callwork\""
+    echo "DATABASE_URL=\"postgresql://user:<db_password>@localhost:5432/callwork\""
     echo "NEXTAUTH_SECRET=\"$(openssl rand -base64 32)\""
     echo "NEXTAUTH_URL=\"http://localhost:3000\""
     echo "TELEGRAM_BOT_TOKEN=\"your-bot-token-here\""

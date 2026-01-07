@@ -3,7 +3,7 @@
 ## Шаг 1: Создайте .env файл
 
 ```bash
-cd "/Users/sile/Documents/Status Stock 4.0/Call stat/callwork"
+cd /path/to/callwork
 cp .env.example .env
 ```
 
@@ -11,14 +11,14 @@ cp .env.example .env
 
 ```env
 # Используйте локальный PostgreSQL или создайте бесплатную БД на neon.tech
-DATABASE_URL="postgresql://user:password@localhost:5432/callwork"
+DATABASE_URL="postgresql://user:<db_password>@localhost:5432/callwork"
 
 # Сгенерируйте секрет
 NEXTAUTH_SECRET="$(openssl rand -base64 32)"
 NEXTAUTH_URL="http://localhost:3000"
 
 # Получите токен у @BotFather в Telegram (или оставьте пустым на первый запуск)
-TELEGRAM_BOT_TOKEN="your-bot-token"
+TELEGRAM_BOT_TOKEN="<telegram_bot_token>"
 ```
 
 ## Шаг 2: Настройте базу данных

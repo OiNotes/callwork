@@ -1,6 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
+import { useCallback } from 'react'
 import { AlertTriangle, AlertCircle, Info, X } from 'lucide-react'
 
 interface Alert {
@@ -23,6 +24,9 @@ interface AlertCardProps {
 }
 
 export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
+  const handleMarkRead = useCallback(() => {
+    onMarkRead(alert.id)
+  }, [alert.id, onMarkRead])
   const getSeverityConfig = (severity: string) => {
     switch (severity) {
       case 'CRITICAL':
@@ -80,7 +84,7 @@ export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
     >
       <div className="flex items-start gap-4">
         <div className={`w-12 h-12 rounded-full ${config.iconBg} flex items-center justify-center flex-shrink-0`}>
-          <Icon className="w-6 h-6 text-white" />
+          <Icon className="w-6 h-6 text-[var(--status-foreground)]" />
         </div>
 
         <div className="flex-1">
@@ -98,7 +102,7 @@ export function AlertCard({ alert, onMarkRead }: AlertCardProps) {
 
             {!alert.isRead && (
               <button
-                onClick={() => onMarkRead(alert.id)}
+                onClick={handleMarkRead}
                 className="p-2 hover:bg-[var(--muted)] rounded-lg transition-colors"
                 aria-label="Пометить как прочитанное"
               >

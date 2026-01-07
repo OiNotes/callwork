@@ -1,22 +1,34 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+import { csrfError, validateOrigin } from '@/lib/csrf'
+import { logError } from '@/lib/logger'
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions)
-  
-  if (!session?.user) {
-    return new NextResponse('Unauthorized', { status: 401 })
+  if (!validateOrigin(request)) {
+    return csrfError()
   }
 
   try {
+    const user = await requireAuth()
     const body = await request.json()
-    const { isFocus } = body
-    const { id } = await params
+    const bodySchema = z.object({
+      isFocus: z.boolean(),
+    })
+    const parsedBody = bodySchema.safeParse(body)
+    if (!parsedBody.success) {
+      return new NextResponse('Invalid request body', { status: 400 })
+    }
+    const { isFocus } = parsedBody.data
+    const { id } = await context.params
+    const idResult = z.string().cuid().safeParse(id)
+    if (!idResult.success) {
+      return new NextResponse('Invalid deal id', { status: 400 })
+    }
 
     // 1. Check permissions
     const deal = await prisma.deal.findUnique({
@@ -31,19 +43,20 @@ export async function PATCH(
     // Allow if:
     // - User is the deal owner
     // - User is a MANAGER and deal belongs to their team member
-    const isOwner = deal.managerId === session.user.id
+    const isOwner = deal.managerId === user.id
 
+    const isAdmin = user.role === 'ADMIN'
     let hasTeamAccess = false
-    if (session.user.role === 'MANAGER' && !isOwner) {
+    if (user.role === 'MANAGER' && !isOwner) {
       // Проверяем что владелец сделки - сотрудник этого менеджера
-      const dealOwner = await prisma.user.findUnique({
-        where: { id: deal.managerId },
+      const dealOwner = await prisma.user.findFirst({
+        where: { id: deal.managerId, isActive: true },
         select: { managerId: true }
       })
-      hasTeamAccess = dealOwner?.managerId === session.user.id
+      hasTeamAccess = dealOwner?.managerId === user.id
     }
 
-    if (!isOwner && !hasTeamAccess) {
+    if (!isOwner && !hasTeamAccess && !isAdmin) {
       return new NextResponse('Forbidden', { status: 403 })
     }
 
@@ -55,7 +68,10 @@ export async function PATCH(
 
     return NextResponse.json(updatedDeal)
   } catch (error) {
-    console.error('Error updating deal focus:', error)
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return new NextResponse('Unauthorized', { status: 401 })
+    }
+    logError('Error updating deal focus', error)
     return new NextResponse('Internal Server Error', { status: 500 })
   }
 }

@@ -2,6 +2,9 @@
 
 import { memo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { toDecimal } from '@/lib/utils/decimal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { BarChart2 } from 'lucide-react'
 
 interface DataPoint {
   date: string
@@ -14,6 +17,16 @@ interface TeamSalesChartProps {
 }
 
 export const TeamSalesChart = memo(function TeamSalesChart({ data }: TeamSalesChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <EmptyState
+        icon={<BarChart2 className="w-6 h-6" />}
+        title="Нет данных"
+        description="Данные появятся после создания отчётов"
+      />
+    )
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -35,7 +48,7 @@ export const TeamSalesChart = memo(function TeamSalesChart({ data }: TeamSalesCh
           tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+          tickFormatter={(value) => `${toDecimal(value).dividedBy(1000).toDecimalPlaces(0).toNumber()}k`}
         />
         <Tooltip
           contentStyle={{
@@ -47,7 +60,7 @@ export const TeamSalesChart = memo(function TeamSalesChart({ data }: TeamSalesCh
             color: 'var(--foreground)'
           }}
           itemStyle={{ color: 'var(--foreground)' }}
-          formatter={(value: number) => [`${value.toLocaleString('ru-RU')} ₽`, 'Продажи']}
+          formatter={(value) => [`${Number(value).toLocaleString('ru-RU')} ₽`, 'Продажи']}
         />
         <Area
           type="monotone"

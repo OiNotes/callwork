@@ -13,6 +13,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { CONVERSION_BENCHMARKS } from '@/lib/config/conversionBenchmarks'
+import { logError } from '@/lib/logger'
 
 interface FunnelMetrics {
   userId: string
@@ -43,11 +44,20 @@ interface RedZone {
   impact: string
 }
 
+interface ConversionInput {
+  zoomBooked: number
+  zoom1Held: number
+  zoom2Held: number
+  contractReview: number
+  pushCount: number
+  successfulDeals: number
+}
+
 const args = process.argv.slice(2)
 const isDetailed = args.includes('--detailed')
 const criticalOnly = args.includes('--critical-only')
 
-function calculateConversions(metrics: any) {
+function calculateConversions(metrics: ConversionInput): FunnelMetrics['conversions'] {
   const safeDiv = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0)
 
   return {
@@ -60,7 +70,7 @@ function calculateConversions(metrics: any) {
   }
 }
 
-function findRedZones(conversions: any): RedZone[] {
+function findRedZones(conversions: FunnelMetrics['conversions']): RedZone[] {
   const issues: RedZone[] = []
 
   const checks = [
@@ -274,6 +284,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('❌ Ошибка при анализе:', error)
+  logError('Ошибка при анализе', error)
   process.exit(1)
 })

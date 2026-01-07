@@ -1,7 +1,7 @@
 'use client'
 
-import { forwardRef, type HTMLAttributes, type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { forwardRef, type HTMLAttributes, type ReactNode, type ComponentType } from 'react'
+import { motion } from '@/lib/motion'
 import { cn } from '@/lib/utils/cn'
 
 export type CardVariant = 'default' | 'glass' | 'outlined' | 'elevated'
@@ -15,6 +15,7 @@ type BaseCardProps = Omit<
 export interface CardProps extends BaseCardProps {
   variant?: CardVariant
   interactive?: boolean
+  children?: ReactNode
 }
 
 const variantStyles: Record<CardVariant, string> = {
@@ -25,33 +26,46 @@ const variantStyles: Record<CardVariant, string> = {
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ variant = 'default', interactive = false, className, children, onClick, ...props }, ref) => {
-    const Comp = interactive ? motion.div : 'div'
+  ({ variant = 'default', interactive = false, className, children, onClick, onKeyDown, ...props }, ref) => {
+    const sharedClassName = cn(
+      'rounded-[var(--radius-lg)] p-4 md:p-6',
+      'text-[var(--card-foreground)]',
+      variantStyles[variant],
+      interactive && 'cursor-pointer',
+      className
+    )
+    const MotionDiv = motion.div as unknown as ComponentType<any>
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.currentTarget.click()
+      }
+      onKeyDown?.(event)
+    }
+
+    if (interactive) {
+      return (
+        <MotionDiv
+          ref={ref}
+          className={sharedClassName}
+          onClick={onClick}
+          onKeyDown={handleKeyDown}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          role="button"
+          tabIndex={0}
+          {...props}
+        >
+          {children}
+        </MotionDiv>
+      )
+    }
 
     return (
-      <Comp
-        ref={ref}
-        className={cn(
-          'rounded-[var(--radius-lg)] p-4 md:p-6',
-          'text-[var(--card-foreground)]',
-          variantStyles[variant],
-          interactive && 'cursor-pointer',
-          className
-        )}
-        onClick={onClick}
-        {...(interactive
-          ? {
-              whileHover: { scale: 1.01 },
-              whileTap: { scale: 0.99 },
-              transition: { type: 'spring', stiffness: 400, damping: 25 },
-            }
-          : {})}
-        role={interactive ? 'button' : undefined}
-        tabIndex={interactive ? 0 : undefined}
-        {...props}
-      >
+      <div ref={ref} className={sharedClassName} onClick={onClick} {...props}>
         {children}
-      </Comp>
+      </div>
     )
   }
 )

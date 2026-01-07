@@ -168,7 +168,7 @@ export function formatPercent(num: number, decimals: number = 1): string {
 }
 
 export function getConversionColor(conversion: number, isRedZone: boolean): string {
-  if (isRedZone) return '#EF4444'
-  if (conversion >= 70) return '#10B981'
-  return '#F59E0B'
+  if (isRedZone) return 'var(--danger)'
+  if (conversion >= 70) return 'var(--success)'
+  return 'var(--warning)'
 }

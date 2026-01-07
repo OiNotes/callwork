@@ -56,6 +56,10 @@
   /* Red */
   --info: #3B82F6;
   /* Blue */
+  --status-foreground: #FFFFFF;
+
+  /* Overlays */
+  --overlay: rgba(10, 12, 15, 0.45);
 
   /* TV Mode Specific (Large Screen Optimized) */
   --tv-font-3xl: 3rem;    /* 48px - Large headers */
@@ -81,83 +85,87 @@
 @media (prefers-color-scheme: dark) {
   :root {
     /* --- DEEP PROFESSIONAL THEME (Dark) --- */
-    /* Navy/Slate tones, avoiding #000000 pitch black */
+    /* Calm neutral tones, avoiding #000000 pitch black */
 
     /* Base */
-    --background: #0F1117;
-    /* Deep Navy/Slate */
-    --foreground: #F8FAFC;
-    /* Off-white */
+    --background: #0A0A0B;
+    /* Deep charcoal */
+    --foreground: #F5F5F7;
+    /* Soft off-white */
 
     /* Surfaces */
-    --card: #1E293B;
-    /* Slate 800 */
-    --card-foreground: #F8FAFC;
-    --popover: #1E293B;
-    --popover-foreground: #F8FAFC;
+    --card: #141416;
+    --card-foreground: #F5F5F7;
+    --popover: #151518;
+    --popover-foreground: #F5F5F7;
 
     /* Brand */
-    --primary: #3B82F6;
-    /* Slightly lighter blue for dark mode contrast */
-    --primary-foreground: #FFFFFF;
-    --primary-hover: #2563EB;
+    --primary: #4F8DFF;
+    --primary-foreground: #F5F7FB;
+    --primary-hover: #3C7AE0;
 
     /* Secondary / Muted */
-    --secondary: #334155;
-    /* Slate 700 */
-    --secondary-foreground: #94A3B8;
-    --muted: #1E293B;
-    --muted-foreground: #64748B;
+    --secondary: #1C1C1F;
+    --secondary-foreground: #A1A1AA;
+    --muted: #18181B;
+    --muted-foreground: #A1A1AA;
 
     /* Accents & Borders */
-    --accent: #334155;
-    --accent-foreground: #F8FAFC;
-    --border: #334155;
-    /* Slate 700 */
-    --input: #1E293B;
+    --accent: #252528;
+    --accent-foreground: #F5F5F7;
+    --border: #27272A;
+    --input: #1A1A1D;
+    --ring: #3F3F46;
 
     /* Status Colors (Adjusted for Dark) */
-    --success: #34D399;
-    --warning: #FBBF24;
-    --danger: #F87171;
-    --info: #60A5FA;
+    --success: #3FBF8A;
+    --warning: #F3B347;
+    --danger: #F28B82;
+    --info: #7AA2F7;
+    --status-foreground: #0A0A0B;
+
+    /* Overlays */
+    --overlay: rgba(5, 5, 7, 0.65);
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
-    --shadow-glow: 0 0 25px rgba(59, 130, 246, 0.2);
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+    --shadow-md: 0 6px 12px -4px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 18px 30px -12px rgb(0 0 0 / 0.65), 0 8px 18px -8px rgb(0 0 0 / 0.5);
+    --shadow-glow: 0 0 24px rgba(79, 141, 255, 0.18);
   }
 }
 
 /* Manual Dark Mode Override class */
 .dark {
   /* Same as media query above, repeated for manual toggling */
-  --background: #0F1117;
-  --foreground: #F8FAFC;
-  --card: #1E293B;
-  --card-foreground: #F8FAFC;
-  --popover: #1E293B;
-  --popover-foreground: #F8FAFC;
-  --primary: #3B82F6;
-  --primary-foreground: #FFFFFF;
-  --primary-hover: #2563EB;
-  --secondary: #334155;
-  --secondary-foreground: #94A3B8;
-  --muted: #1E293B;
-  --muted-foreground: #64748B;
-  --accent: #334155;
-  --accent-foreground: #F8FAFC;
-  --border: #334155;
-  --input: #1E293B;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --danger: #F87171;
-  --info: #60A5FA;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
-  --shadow-glow: 0 0 25px rgba(59, 130, 246, 0.2);
+  --background: #0A0A0B;
+  --foreground: #F5F5F7;
+  --card: #141416;
+  --card-foreground: #F5F5F7;
+  --popover: #151518;
+  --popover-foreground: #F5F5F7;
+  --primary: #4F8DFF;
+  --primary-foreground: #F5F7FB;
+  --primary-hover: #3C7AE0;
+  --secondary: #1C1C1F;
+  --secondary-foreground: #A1A1AA;
+  --muted: #18181B;
+  --muted-foreground: #A1A1AA;
+  --accent: #252528;
+  --accent-foreground: #F5F5F7;
+  --border: #27272A;
+  --input: #1A1A1D;
+  --ring: #3F3F46;
+  --success: #3FBF8A;
+  --warning: #F3B347;
+  --danger: #F28B82;
+  --info: #7AA2F7;
+  --status-foreground: #0A0A0B;
+  --overlay: rgba(5, 5, 7, 0.65);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-md: 0 6px 12px -4px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 18px 30px -12px rgb(0 0 0 / 0.65), 0 8px 18px -8px rgb(0 0 0 / 0.5);
+  --shadow-glow: 0 0 24px rgba(79, 141, 255, 0.18);
 }
 
 @layer base {
@@ -208,6 +216,10 @@
   }
   .border-gray-300, .border-gray-200, .border-gray-100 {
     border-color: var(--border);
+  }
+
+  .dark .text-white {
+    color: var(--foreground);
   }
 }
 

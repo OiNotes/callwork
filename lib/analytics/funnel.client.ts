@@ -1,11 +1,13 @@
-import { Report } from '@prisma/client'
+import type { Report } from '@prisma/client'
 import { CONVERSION_BENCHMARKS, FUNNEL_STAGES, KPI_BENCHMARKS, PLAN_HEURISTICS } from '@/lib/config/metrics'
+import type { FunnelStageId } from '@/lib/config/conversionBenchmarks'
 import {
   computeConversions,
   stageBenchmarkByIdWithOverrides,
   type ConversionBenchmarkConfig,
 } from '@/lib/calculations/metrics'
 import type { AlertThresholdConfig } from '@/lib/services/RopSettingsService'
+import { roundMoney, toDecimal, toNumber, type Decimal } from '@/lib/utils/decimal'
 
 export interface FunnelStage {
   id: string
@@ -49,6 +51,19 @@ export interface ManagerStats {
   trend: 'up' | 'down' | 'flat'
 }
 
+type ReportStatsInput = Pick<
+  Report,
+  | 'zoomAppointments'
+  | 'pzmConducted'
+  | 'vzmConducted'
+  | 'contractReviewCount'
+  | 'pushCount'
+  | 'successfulDeals'
+  | 'monthlySalesAmount'
+  | 'refusalsCount'
+  | 'warmingUpCount'
+>
+
 export const BENCHMARKS = {
   bookedToZoom1: CONVERSION_BENCHMARKS.BOOKED_TO_ZOOM1,
   zoom1ToZoom2: CONVERSION_BENCHMARKS.ZOOM1_TO_ZOOM2,
@@ -65,13 +80,13 @@ const DEFAULT_ALERT_THRESHOLDS: AlertThresholdConfig = {
 }
 
 export function getHeatmapColor(value: number, benchmark: number): string {
-  if (value === 0) return 'bg-white text-gray-400'
+  if (value === 0) return 'bg-[var(--muted)] text-[var(--muted-foreground)]'
   const ratio = value / benchmark
-  if (ratio >= 1.1) return 'bg-emerald-50 text-emerald-700 font-bold'
-  if (ratio >= 1.0) return 'bg-green-50 text-green-700'
-  if (ratio >= 0.9) return 'bg-yellow-50 text-yellow-700'
-  if (ratio >= 0.7) return 'bg-orange-50 text-orange-700'
-  return 'bg-red-50 text-red-700 font-bold'
+  if (ratio >= 1.1) return 'bg-[var(--success)]/20 text-[var(--success)] font-bold'
+  if (ratio >= 1.0) return 'bg-[var(--success)]/15 text-[var(--success)]'
+  if (ratio >= 0.9) return 'bg-[var(--warning)]/10 text-[var(--warning)]'
+  if (ratio >= 0.7) return 'bg-[var(--warning)]/20 text-[var(--warning)]'
+  return 'bg-[var(--danger)]/15 text-[var(--danger)] font-bold'
 }
 
 /**
@@ -79,16 +94,27 @@ export function getHeatmapColor(value: number, benchmark: number): string {
  * Не требует обращения к БД, использует переданные значения для планов
  */
 export function calculateManagerStatsClient(
-  reports: Report[],
+  reports: ReportStatsInput[],
   planSales: number = 0,
   planDeals: number = 0,
   options?: { salesPerDeal?: number }
 ): Omit<ManagerStats, 'id' | 'name'> {
   const salesPerDeal = options?.salesPerDeal ?? PLAN_HEURISTICS.SALES_PER_DEAL
 
-  const totals = reports.reduce(
+  type Totals = {
+    zoomBooked: number
+    zoom1Held: number
+    zoom2Held: number
+    contractReview: number
+    pushCount: number
+    successfulDeals: number
+    salesAmount: Decimal
+    refusals: number
+    warming: number
+  }
+  const totals = reports.reduce<Totals>(
     (acc, report) => {
-      const pushCount = (report as any).pushCount ?? report.contractReviewCount ?? 0
+      const pushCount = report.pushCount ?? report.contractReviewCount ?? 0
 
       return {
         zoomBooked: acc.zoomBooked + report.zoomAppointments,
@@ -97,7 +123,7 @@ export function calculateManagerStatsClient(
         contractReview: acc.contractReview + report.contractReviewCount,
         pushCount: acc.pushCount + pushCount,
         successfulDeals: acc.successfulDeals + report.successfulDeals,
-        salesAmount: acc.salesAmount + Number(report.monthlySalesAmount),
+        salesAmount: acc.salesAmount.plus(toDecimal(report.monthlySalesAmount)),
         refusals: acc.refusals + (report.refusalsCount || 0),
         warming: acc.warming + (report.warmingUpCount || 0),
       }
@@ -109,11 +135,12 @@ export function calculateManagerStatsClient(
       contractReview: 0,
       pushCount: 0,
       successfulDeals: 0,
-      salesAmount: 0,
+      salesAmount: toDecimal(0),
       refusals: 0,
       warming: 0,
     }
   )
+  const salesAmount = toNumber(roundMoney(totals.salesAmount))
 
   const { stages, northStar, totalConversion } = computeConversions({
     zoomBooked: totals.zoomBooked,
@@ -132,11 +159,15 @@ export function calculateManagerStatsClient(
   )
   const activityScore = Math.round((expectedActivity + actualActivity) / 2)
 
-  const progress = planSales > 0 ? (totals.salesAmount / planSales) * 100 : 0
+  const planSalesDecimal = toDecimal(planSales)
+  const progress = planSales > 0 ? totals.salesAmount.dividedBy(planSalesDecimal).times(100).toNumber() : 0
   const trend = progress >= 80 ? 'up' : progress >= 50 ? 'flat' : 'down'
+  const calculatedPlanDeals = planSales > 0 ? Math.round(planSales / salesPerDeal) : 0
+  const resolvedPlanDeals = planDeals > 0 ? planDeals : calculatedPlanDeals
 
   return {
     ...totals,
+    salesAmount,
     bookedToZoom1: (convMap.zoom1Held as number) || 0,
     zoom1ToZoom2: (convMap.zoom2Held as number) || 0,
     zoom2ToContract: (convMap.contractReview as number) || 0,
@@ -145,7 +176,7 @@ export function calculateManagerStatsClient(
     northStar,
     totalConversion,
     planSales,
-    planDeals: planDeals || Math.max(1, Math.round(planSales / salesPerDeal)),
+    planDeals: resolvedPlanDeals,
     activityScore,
     trend,
   }
@@ -160,7 +191,7 @@ export function getFunnelData(
     ...(benchmarks ?? {}),
   }
 
-  const stageMap = {
+  const stageMap: Record<FunnelStageId, number> = {
     zoomBooked: stats.zoomBooked,
     zoom1Held: stats.zoom1Held,
     zoom2Held: stats.zoom2Held,
@@ -169,7 +200,7 @@ export function getFunnelData(
     deal: stats.successfulDeals,
   }
 
-  const conversionMap: Record<string, number> = {
+  const conversionMap: Partial<Record<FunnelStageId, number>> = {
     zoom1Held: stats.bookedToZoom1,
     zoom2Held: stats.zoom1ToZoom2,
     contractReview: stats.zoom2ToContract,
@@ -179,14 +210,14 @@ export function getFunnelData(
 
   return FUNNEL_STAGES.map((stage, index) => {
     const prevStage = FUNNEL_STAGES[index - 1]
-    const prevValue = prevStage ? stageMap[prevStage.id as keyof typeof stageMap] : undefined
+    const prevValue = prevStage ? stageMap[prevStage.id] : undefined
     const conversion = conversionMap[stage.id] ?? 100
-    const benchmark = stageBenchmarkByIdWithOverrides(stage.id as any, mergedBenchmarks)
+    const benchmark = stageBenchmarkByIdWithOverrides(stage.id, mergedBenchmarks)
 
     return {
       id: stage.id,
       label: stage.label,
-      value: stageMap[stage.id as keyof typeof stageMap],
+      value: stageMap[stage.id],
       prevValue,
       conversion: stage.id === 'zoomBooked' ? 100 : conversion,
       benchmark,

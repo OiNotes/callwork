@@ -25,8 +25,7 @@ export function FullFunnelExample() {
   const { funnel, sideFlow } = calculateFullFunnel(totals)
 
   // Обработчик клика на этап воронки
-  const handleStageClick = (stage: typeof funnel[0]) => {
-    console.log('Clicked stage:', stage)
+  const handleStageClick = (_stage: typeof funnel[0]) => {
     // Здесь можно открыть модальное окно с деталями этапа
     // или перейти на страницу детализации
   }
@@ -44,7 +43,7 @@ export function FullFunnelExample() {
       {/* Дополнительная информация */}
       <div className="mt-8 glass-card p-4">
         <h3 className="font-semibold mb-2">Показатели</h3>
-        <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+        <ul className="text-sm text-[var(--muted-foreground)] space-y-1">
           <li>Общая конверсия Zoom → Сделки: {((totals.deals / totals.zoomBooked) * 100).toFixed(1)}%</li>
           <li>Процент отказов от первого Zoom: {sideFlow.refusals.rateFromFirstZoom}%</li>
           <li>Клиентов в подогреве: {sideFlow.warming.count}</li>
@@ -57,21 +56,21 @@ export function FullFunnelExample() {
 /**
  * Пример интеграции с API
  */
-export async function FullFunnelFromAPI({ employeeId }: { employeeId: number }) {
+export async function FullFunnelFromAPI({ userId }: { userId: string }) {
   // Получение данных из API
-  const response = await fetch(`/api/analytics/funnel?employeeId=${employeeId}`)
+  const response = await fetch(`/api/analytics/funnel?userId=${encodeURIComponent(userId)}`)
   const data = await response.json()
 
   const totals: FunnelTotals = {
-    zoomBooked: data.zoom_booked || 0,
-    zoom1Held: data.zoom1_held || 0,
-    zoom2Held: data.zoom2_held || 0,
-    contractReview: data.contract_review || 0,
-    push: data.push || 0,
-    deals: data.deals || 0,
-    sales: data.sales || 0,
-    refusals: data.refusals || 0,
-    warming: data.warming || 0,
+    zoomBooked: data.totals?.zoomBooked || 0,
+    zoom1Held: data.totals?.zoom1Held || 0,
+    zoom2Held: data.totals?.zoom2Held || 0,
+    contractReview: data.totals?.contractReview || 0,
+    push: data.totals?.push || 0,
+    deals: data.totals?.deals || 0,
+    sales: data.totals?.sales || 0,
+    refusals: data.totals?.refusals || 0,
+    warming: data.totals?.warming || 0,
   }
 
   const { funnel, sideFlow } = calculateFullFunnel(totals)

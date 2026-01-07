@@ -3,6 +3,9 @@ export interface ReportState {
   date: Date
   data: Partial<ReportData>
   lastReport?: Partial<ReportData>
+  overwriteConfirmed?: boolean
+  updatedAt: number
+  ttlMs?: number
 }
 
 export interface ReportData {
@@ -13,8 +16,9 @@ export interface ReportData {
   warmingUpCount: number
   vzmConducted: number
   contractReviewCount: number
+  pushCount: number
   successfulDeals: number
-  monthlySalesAmount: number
+  monthlySalesAmount: string
 }
 
 export type SessionState = 'awaiting_code' | ReportState

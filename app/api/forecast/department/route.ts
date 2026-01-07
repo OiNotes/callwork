@@ -1,26 +1,24 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireManager } from '@/lib/auth/get-session'
 import { SalesForecastService } from '@/lib/services/SalesForecastService'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 const service = new SalesForecastService()
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  
-  if (!session?.user) {
-    return new NextResponse('Unauthorized', { status: 401 })
-  }
-
-  if (session.user.role !== 'MANAGER') {
-     return new NextResponse('Forbidden', { status: 403 })
-  }
-
   try {
-    const data = await service.getDepartmentForecast(session.user.id)
-    return NextResponse.json(data)
+    const manager = await requireManager()
+    const data = await service.getDepartmentForecast(manager.id)
+    return jsonWithPrivateCache(data)
   } catch (error) {
-    console.error('Department forecast error:', error)
+    logError('Department forecast error', error)
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return new NextResponse('Unauthorized', { status: 401 })
+    }
+    if (error instanceof Error && error.message.includes('Manager access required')) {
+      return new NextResponse('Forbidden', { status: 403 })
+    }
     return new NextResponse('Internal Server Error', { status: 500 })
   }
 }

@@ -2,32 +2,59 @@ import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { Decimal } from '@prisma/client/runtime/library'
+import DecimalJS from 'decimal.js'
 import { broadcastDeal } from '../sse/deals/route'
 import { broadcastActivity } from '../sse/activities/route'
+import { buildPagination } from '@/lib/utils/pagination'
+import { csrfError, validateOrigin } from '@/lib/csrf'
+import { toDecimal, toNumber } from '@/lib/utils/decimal'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
+
+const MAX_COUNT = 10000
+const MAX_SALES_AMOUNT = 1_000_000_000
+const MAX_REASON_LENGTH = 500
+const MAX_COMMENT_LENGTH = 1000
+
+const parseDecimalString = (value: unknown) => {
+  if (typeof value !== 'string' && typeof value !== 'number') return value
+  return String(value)
+}
+
+const moneySchema = z.preprocess(
+  (value) => parseDecimalString(value),
+  z.string().refine((value) => {
+    try {
+      const decimal = new DecimalJS(value)
+      return decimal.isFinite() && decimal.greaterThanOrEqualTo(0) && decimal.lessThanOrEqualTo(MAX_SALES_AMOUNT)
+    } catch {
+      return false
+    }
+  }, { message: 'Invalid money amount' })
+)
 
 const createReportSchema = z.object({
   date: z.string().datetime(),
-  zoomAppointments: z.number().int().min(0),
-  pzmConducted: z.number().int().min(0),
-  refusalsCount: z.number().int().min(0),
-  refusalsReasons: z.string().optional(),
+  zoomAppointments: z.number().int().min(0).max(MAX_COUNT),
+  pzmConducted: z.number().int().min(0).max(MAX_COUNT),
+  refusalsCount: z.number().int().min(0).max(MAX_COUNT),
+  refusalsReasons: z.string().trim().max(MAX_REASON_LENGTH).optional(),
   refusalsByStage: z
     .object({
-      zoomBooked: z.number().int().min(0).optional(),
-      zoom1Held: z.number().int().min(0).optional(),
-      zoom2Held: z.number().int().min(0).optional(),
-      contractReview: z.number().int().min(0).optional(),
-      push: z.number().int().min(0).optional(),
+      zoomBooked: z.number().int().min(0).max(MAX_COUNT).optional(),
+      zoom1Held: z.number().int().min(0).max(MAX_COUNT).optional(),
+      zoom2Held: z.number().int().min(0).max(MAX_COUNT).optional(),
+      contractReview: z.number().int().min(0).max(MAX_COUNT).optional(),
+      push: z.number().int().min(0).max(MAX_COUNT).optional(),
     })
+    .strict()
     .optional(),
-  warmingUpCount: z.number().int().min(0),
-  vzmConducted: z.number().int().min(0),
-  contractReviewCount: z.number().int().min(0),
-  pushCount: z.number().int().min(0),
-  successfulDeals: z.number().int().min(0),
-  monthlySalesAmount: z.number().min(0),
-  comment: z.string().optional(),
+  warmingUpCount: z.number().int().min(0).max(MAX_COUNT),
+  vzmConducted: z.number().int().min(0).max(MAX_COUNT),
+  contractReviewCount: z.number().int().min(0).max(MAX_COUNT),
+  pushCount: z.number().int().min(0).max(MAX_COUNT),
+  successfulDeals: z.number().int().min(0).max(MAX_COUNT),
+  monthlySalesAmount: moneySchema,
+  comment: z.string().trim().max(MAX_COMMENT_LENGTH).optional(),
 }).refine(
   (data) => {
     // Валидация воронки: каждый следующий этап не может превышать предыдущий
@@ -50,40 +77,104 @@ export async function GET(req: Request) {
     const user = await requireAuth()
     const { searchParams } = new URL(req.url)
     
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
-    const userId = searchParams.get('userId')
+    const querySchema = z.object({
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+      userId: z.string().cuid().optional(),
+      page: z.coerce.number().int().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+    })
+    const parsedQuery = querySchema.safeParse({
+      startDate: searchParams.get('startDate') ?? undefined,
+      endDate: searchParams.get('endDate') ?? undefined,
+      userId: searchParams.get('userId') ?? undefined,
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+    })
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: parsedQuery.error.issues }, { status: 400 })
+    }
+    const { startDate, endDate, userId } = parsedQuery.data
+    const page = parsedQuery.data.page ?? 1
+    const limit = parsedQuery.data.limit ?? 50
+    const skip = (page - 1) * limit
 
     let targetUserId = user.id
-    if (userId && user.role === 'MANAGER') {
-      targetUserId = userId
+    if (userId) {
+      if (user.role === 'MANAGER') {
+        const targetUser = await prisma.user.findFirst({
+          where: {
+            id: userId,
+            isActive: true,
+            OR: [{ managerId: user.id }, { id: user.id }],
+          },
+          select: { id: true },
+        })
+        if (!targetUser) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+        targetUserId = userId
+      } else if (user.role === 'ADMIN') {
+        const targetUser = await prisma.user.findFirst({
+          where: { id: userId, isActive: true },
+          select: { id: true },
+        })
+        if (!targetUser) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+        targetUserId = userId
+      } else if (userId !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
-    const reports = await prisma.report.findMany({
-      where: {
-        userId: targetUserId,
-        ...(startDate && endDate && {
-          date: {
-            gte: new Date(startDate),
-            lte: new Date(endDate),
-          },
-        }),
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    })
+    const [reports, total] = await Promise.all([
+      prisma.report.findMany({
+        where: {
+          userId: targetUserId,
+          ...(startDate && endDate && {
+            date: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }),
+        },
+        orderBy: {
+          date: 'desc',
+        },
+        take: limit,
+        skip,
+      }),
+      prisma.report.count({
+        where: {
+          userId: targetUserId,
+          ...(startDate && endDate && {
+            date: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }),
+        },
+      }),
+    ])
 
-    return NextResponse.json({ reports })
-  } catch {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+    return jsonWithPrivateCache({
+      data: reports,
+      pagination: buildPagination(page, limit, total),
+    })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
+  if (!validateOrigin(req)) {
+    return csrfError()
+  }
+
   try {
     const user = await requireAuth()
     const body = await req.json()
@@ -93,6 +184,16 @@ export async function POST(req: Request) {
     // Используем транзакцию для атомарной проверки и создания
     // Предотвращает race condition между проверкой и созданием
     const reportDate = new Date(data.date)
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    if (reportDate > today) {
+      return NextResponse.json(
+        { error: 'Нельзя создавать отчёты на будущие даты' },
+        { status: 400 }
+      )
+    }
+    const salesAmountString = toDecimal(data.monthlySalesAmount).toString()
+    const salesAmountNumber = toNumber(toDecimal(salesAmountString))
 
     const report = await prisma.$transaction(async (tx) => {
       // Проверяем существование внутри транзакции
@@ -123,7 +224,7 @@ export async function POST(req: Request) {
           contractReviewCount: data.contractReviewCount,
           pushCount: data.pushCount,
           successfulDeals: data.successfulDeals,
-          monthlySalesAmount: new Decimal(data.monthlySalesAmount),
+          monthlySalesAmount: salesAmountString,
           comment: data.comment,
         },
       })
@@ -134,7 +235,7 @@ export async function POST(req: Request) {
       broadcastDeal({
         employeeId: user.id,
         employeeName: user.name,
-        amount: data.monthlySalesAmount,
+        amount: salesAmountNumber,
         dealsCount: data.successfulDeals
       })
     }
@@ -146,7 +247,7 @@ export async function POST(req: Request) {
         ? `${user.name} закрыл ${data.successfulDeals} ${pluralizeDeal(data.successfulDeals)}`
         : `${user.name} отправил отчёт`,
       details: data.successfulDeals > 0
-        ? `Сумма: ${formatMoney(data.monthlySalesAmount)}₽`
+        ? `Сумма: ${formatMoney(salesAmountNumber)}₽`
         : `Zoom: ${data.zoomAppointments}, ПЗМ: ${data.pzmConducted}`,
       userId: user.id,
       userName: user.name

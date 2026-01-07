@@ -1,11 +1,53 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ForecastChart } from '@/components/analytics/ForecastChart'
 import { Users } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { logError } from '@/lib/logger'
+import dynamic from 'next/dynamic'
+import { SkeletonChart } from '@/components/ui/SkeletonChart'
+
+interface ForecastMetrics {
+  current: number
+  goal: number
+  projected: number
+  completion: number
+  pacing: number
+  isPacingGood: boolean
+  daysInMonth: number
+  daysPassed: number
+  daysRemaining: number
+  dailyAverage: number
+  dailyRequired: number
+  expectedByNow: number
+}
+
+interface ForecastPoint {
+  day: number
+  plan?: number
+  actual?: number
+  forecast?: number
+}
+
+interface DepartmentForecastData {
+  metrics: ForecastMetrics
+  chartData: ForecastPoint[]
+  teamSize: number
+}
+
+const ForecastChart = dynamic(
+  () =>
+    import('@/components/analytics/ForecastChart').then((mod) => ({
+      default: mod.ForecastChart,
+    })),
+  {
+    loading: () => <SkeletonChart />,
+    ssr: false,
+  }
+)
 
 export default function DepartmentForecastPage() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<DepartmentForecastData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -17,7 +59,7 @@ export default function DepartmentForecastPage() {
           setData(json)
         }
       } catch (e) {
-        console.error(e)
+        logError('Failed to fetch department forecast', e)
       } finally {
         setLoading(false)
       }
@@ -25,28 +67,34 @@ export default function DepartmentForecastPage() {
     load()
   }, [])
 
-  if (loading) {
-    return <div className="animate-pulse h-96 bg-[var(--card)] rounded-2xl border border-[var(--border)]" />
+  if (!loading && !data) {
+    return (
+      <EmptyState
+        title="Нет данных"
+        description="Не удалось загрузить прогноз отдела. Попробуйте позже."
+      />
+    )
   }
-
-  if (!data) return <div>Ошибка загрузки данных</div>
-
-  const { metrics, chartData, teamSize } = data
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-         <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)] bg-[var(--card)] px-3 py-1.5 rounded-full border border-[var(--border)] shadow-sm w-fit">
-            <Users className="w-4 h-4" />
-            <span>Размер команды: <b>{teamSize}</b></span>
-         </div>
+         {data ? (
+           <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)] bg-[var(--card)] px-3 py-1.5 rounded-full border border-[var(--border)] shadow-sm w-fit">
+              <Users className="w-4 h-4" />
+              <span>Размер команды: <b>{data.teamSize}</b></span>
+           </div>
+         ) : (
+           <div className="h-8 w-40 rounded-full bg-[var(--muted)]/40 animate-pulse" />
+         )}
       </div>
 
-      <ForecastChart 
-        data={{
-          forecast: metrics,
-          chartData: chartData
-        }} 
+      <ForecastChart
+        loading={loading}
+        data={data ? {
+          forecast: data.metrics,
+          chartData: data.chartData
+        } : undefined}
         userName="Отдел продаж"
       />
     </div>

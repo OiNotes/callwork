@@ -1,19 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { RegisterForm } from '@/components/auth/RegisterForm'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login')
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const handleTabClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const tab = event.currentTarget.dataset.tab as 'login' | 'register' | undefined
+    if (!tab) return
+    setActiveTab(tab)
+    setFormError(null)
+  }, [])
 
   const handleLogin = async (email: string, password: string) => {
     setIsLoading(true)
+    setFormError(null)
     
     const result = await signIn('credentials', {
       email,
@@ -24,7 +33,7 @@ export default function LoginPage() {
     if (result?.ok) {
       router.push('/dashboard')
     } else {
-      alert('Неверный email или пароль')
+      setFormError('Неверный email или пароль')
     }
     
     setIsLoading(false)
@@ -32,6 +41,7 @@ export default function LoginPage() {
 
   const handleRegister = async (data: { email: string; password: string; name: string }) => {
     setIsLoading(true)
+    setFormError(null)
     
     const response = await fetch('/api/auth/register', {
       method: 'POST',
@@ -43,7 +53,7 @@ export default function LoginPage() {
       await handleLogin(data.email, data.password)
     } else {
       const error = await response.json()
-      alert(error.error || 'Ошибка регистрации')
+      setFormError(error.error || 'Ошибка регистрации')
     }
     
     setIsLoading(false)
@@ -68,7 +78,8 @@ export default function LoginPage() {
 
           <div className="flex gap-2 mb-6 p-1 bg-[var(--muted)] rounded-[12px]">
             <button
-              onClick={() => setActiveTab('login')}
+              data-tab="login"
+              onClick={handleTabClick}
               className={`flex-1 py-2.5 rounded-[8px] text-sm font-medium transition-all duration-200 ${
                 activeTab === 'login'
                   ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm'
@@ -78,7 +89,8 @@ export default function LoginPage() {
               Вход
             </button>
             <button
-              onClick={() => setActiveTab('register')}
+              data-tab="register"
+              onClick={handleTabClick}
               className={`flex-1 py-2.5 rounded-[8px] text-sm font-medium transition-all duration-200 ${
                 activeTab === 'register'
                   ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm'
@@ -90,9 +102,19 @@ export default function LoginPage() {
           </div>
 
           {activeTab === 'login' ? (
-            <LoginForm onSubmit={handleLogin} isLoading={isLoading} />
+            <LoginForm
+              onSubmit={handleLogin}
+              isLoading={isLoading}
+              errorMessage={formError}
+              onClearError={() => setFormError(null)}
+            />
           ) : (
-            <RegisterForm onSubmit={handleRegister} isLoading={isLoading} />
+            <RegisterForm
+              onSubmit={handleRegister}
+              isLoading={isLoading}
+              errorMessage={formError}
+              onClearError={() => setFormError(null)}
+            />
           )}
         </div>
       </motion.div>

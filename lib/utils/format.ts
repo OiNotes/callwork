@@ -3,6 +3,8 @@
  *
  * Используются в компонентах дашборда для предотвращения ошибок с типами
  */
+import { logWarning } from '@/lib/logger'
+import { roundMoney, toDecimal, toNumber } from '@/lib/utils/decimal'
 
 /**
  * Форматирует дату в формат "DD месяц YYYY"
@@ -26,7 +28,7 @@ export function formatDate(dateInput: Date | string | null | undefined): string 
 
   // Валидация даты
   if (isNaN(date.getTime())) {
-    console.warn('Invalid date provided to formatDate:', dateInput)
+    logWarning('Invalid date provided to formatDate', { dateInput })
     return 'Неверная дата'
   }
 
@@ -84,17 +86,9 @@ export function formatMoney(amount: number | string | null | undefined): string 
     return '0 ₽'
   }
 
-  // Конверсия строки в число
-  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
-
-  // Валидация числа
-  if (isNaN(numAmount)) {
-    console.warn('Invalid amount provided to formatMoney:', amount)
-    return '0 ₽'
-  }
-
   // Форматирование через Intl.NumberFormat
   try {
+    const numAmount = toNumber(roundMoney(toDecimal(amount)))
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
       currency: 'RUB',
@@ -102,7 +96,7 @@ export function formatMoney(amount: number | string | null | undefined): string 
     }).format(numAmount)
   } catch {
     // Fallback на ручное форматирование
-    const formatted = Math.round(numAmount).toLocaleString('ru-RU')
+    const formatted = toNumber(roundMoney(toDecimal(amount))).toLocaleString('ru-RU')
     return `${formatted} ₽`
   }
 }
@@ -122,18 +116,13 @@ export function formatNumber(num: number | string | null | undefined): string {
     return '0'
   }
 
-  const numValue = typeof num === 'string' ? parseFloat(num) : num
-
-  if (isNaN(numValue)) {
-    return '0'
-  }
-
   try {
+    const numValue = toNumber(toDecimal(num).toDecimalPlaces(0))
     return new Intl.NumberFormat('ru-RU', {
       maximumFractionDigits: 0,
     }).format(numValue)
   } catch {
-    return Math.round(numValue).toLocaleString('ru-RU')
+    return toNumber(toDecimal(num).toDecimalPlaces(0)).toLocaleString('ru-RU')
   }
 }
 

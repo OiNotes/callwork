@@ -2,24 +2,27 @@ import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import { rateLimiter, RATE_LIMITS, rateLimitResponse } from '@/lib/rate-limit'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
+import { RopSettingsService } from '@/lib/services/RopSettingsService'
+import { csrfError, validateOrigin } from '@/lib/csrf'
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!validateOrigin(request)) {
+    return csrfError()
+  }
+
   try {
     const user = await requireAuth()
 
     // Rate limiting: 3 попытки за 5 минут по userId
-    const rateLimitKey = `telegramCode:${user.id}`
-    const rateLimitResult = rateLimiter.isRateLimited(rateLimitKey, RATE_LIMITS.telegramCode)
-    if (rateLimitResult.limited) {
-      return rateLimitResponse(rateLimitResult.resetAt)
-    }
+    const rateLimitResult = await checkRateLimit(`telegramCode:${user.id}`, 'telegramCode')
+    if (!rateLimitResult.success) return rateLimitResponse(rateLimitResult)
 
     // Генерация 6-значного кода
     const code = crypto.randomInt(100000, 999999).toString()
     
-    // Истечение через 15 минут
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    const settings = await RopSettingsService.getEffectiveSettings(null)
+    const expiresAt = new Date(Date.now() + settings.telegramRegistrationTtl * 60 * 1000)
 
     await prisma.user.update({
       where: { id: user.id },
@@ -29,7 +32,11 @@ export async function POST() {
       },
     })
 
-    return NextResponse.json({ code, expiresAt })
+    return NextResponse.json({
+      code,
+      message: 'Код сгенерирован. Используйте команду /register в Telegram боте.',
+      expiresAt,
+    })
   } catch {
     return NextResponse.json(
       { error: 'Unauthorized' },

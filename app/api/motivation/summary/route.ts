@@ -3,11 +3,14 @@ import { requireAuth } from '@/lib/auth/get-session'
 import { getMotivationSummaryForManagers } from '@/lib/motivation/motivationService'
 import { resolveAccessibleManagerIds } from '@/lib/motivation/scope'
 import { getSettingsForUser } from '@/lib/settings/context'
+import { z } from 'zod'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
-function getPeriod(searchParams: URLSearchParams, customStartDay?: number) {
-  const preset = searchParams.get('preset')
-  const startParam = searchParams.get('startDate')
-  const endParam = searchParams.get('endDate')
+function getPeriod(params: { preset?: string; startDate?: string; endDate?: string }, customStartDay?: number) {
+  const preset = params.preset
+  const startParam = params.startDate
+  const endParam = params.endDate
 
   const now = new Date()
   let startDate: Date
@@ -39,18 +42,41 @@ export async function GET(request: Request) {
   try {
     const user = await requireAuth()
     const { searchParams } = new URL(request.url)
-    const managerId = searchParams.get('managerId')
-    const { settings } = await getSettingsForUser(user.id, user.role)
 
-    const period = getPeriod(searchParams, settings.periodStartDay)
-    const managerIds = await resolveAccessibleManagerIds(user, managerId)
+    const querySchema = z.object({
+      preset: z.enum(['week', 'month']).optional(),
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+      managerId: z.union([z.literal('all'), z.string().cuid()]).optional(),
+    })
+    const parsedQuery = querySchema.safeParse({
+      preset: searchParams.get('preset') ?? undefined,
+      startDate: searchParams.get('startDate') ?? undefined,
+      endDate: searchParams.get('endDate') ?? undefined,
+      managerId: searchParams.get('managerId') ?? undefined,
+    })
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: parsedQuery.error.issues }, { status: 400 })
+    }
+
+    const { preset, startDate, endDate, managerId } = parsedQuery.data
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+      return NextResponse.json({ error: 'Invalid period range' }, { status: 400 })
+    }
+
+    const [{ settings }, managerIds] = await Promise.all([
+      getSettingsForUser(user.id, user.role),
+      resolveAccessibleManagerIds(user, managerId ?? null),
+    ])
+
+    const period = getPeriod({ preset, startDate, endDate }, settings.periodStartDay)
     const { summary, grades } = await getMotivationSummaryForManagers(
       managerIds,
       period,
       settings.motivation.grades
     )
 
-    return NextResponse.json({
+    return jsonWithPrivateCache({
       factTurnover: summary.factTurnover,
       hotTurnover: summary.hotTurnover,
       forecastTurnover: summary.forecastTurnover,
@@ -68,7 +94,7 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
-    console.error('GET /api/motivation/summary error', error)
+    logError('GET /api/motivation/summary error', error)
 
     // Различаем типы ошибок - не скрываем реальную причину
     if (error instanceof Error && error.message === 'Unauthorized') {
@@ -78,7 +104,6 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )

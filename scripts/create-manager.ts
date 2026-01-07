@@ -7,7 +7,8 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { resolvePasswordHash } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -15,7 +16,6 @@ async function createManager() {
   console.log('\n👤 СОЗДАНИЕ МЕНЕДЖЕРА\n')
 
   const email = 'manager@callwork.com'
-  const password = 'password123'
   const name = 'Менеджер Callwork'
 
   try {
@@ -34,7 +34,11 @@ async function createManager() {
     }
 
     // Хешируем пароль
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = await resolvePasswordHash({
+      label: 'manager password',
+      envVar: 'MANAGER_PASSWORD',
+      hashEnvVar: 'MANAGER_PASSWORD_HASH',
+    })
 
     // Создаём менеджера
     const manager = await prisma.user.create({
@@ -51,7 +55,7 @@ async function createManager() {
     console.log('✅ Менеджер успешно создан!\n')
     console.log('=' .repeat(60))
     console.log(`Email:    ${manager.email}`)
-    console.log(`Password: ${password}`)
+    console.log('Password: (set via MANAGER_PASSWORD or SEED_PASSWORD)')
     console.log(`Name:     ${manager.name}`)
     console.log(`Role:     ${manager.role}`)
     console.log(`Goal:     ${manager.monthlyGoal?.toString() || 'не установлена'} ₽`)
@@ -60,7 +64,7 @@ async function createManager() {
     console.log('\n🔐 Используйте эти данные для входа в систему\n')
 
   } catch (error) {
-    console.error('❌ Ошибка при создании менеджера:', error)
+    logError('Ошибка при создании менеджера', error)
     throw error
   }
 }
@@ -70,8 +74,8 @@ async function main() {
 }
 
 main()
-  .catch(error => {
-    console.error('\n💥 КРИТИЧЕСКАЯ ОШИБКА:', error)
+  .catch((error) => {
+    logError('Критическая ошибка', error)
     process.exit(1)
   })
   .finally(async () => {

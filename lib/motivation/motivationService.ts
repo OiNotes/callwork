@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { DealStatus, PaymentStatus } from '@prisma/client'
 import { MOTIVATION_GRADE_PRESETS, MotivationGradeConfig } from '@/lib/config/motivationGrades'
 import { calculateMotivation, MotivationCalculationResult } from '@/lib/motivation/motivationCalculator'
+import { toDecimal, toNumber } from '@/lib/utils/decimal'
 
 export interface MotivationPeriod {
   startDate: Date
@@ -23,9 +24,9 @@ async function loadGrades(): Promise<MotivationGradeConfig[]> {
   }
 
   return grades.map((grade) => ({
-    minTurnover: Number(grade.minTurnover),
-    maxTurnover: grade.maxTurnover === null ? null : Number(grade.maxTurnover),
-    commissionRate: Number(grade.commissionRate),
+    minTurnover: toNumber(toDecimal(grade.minTurnover)),
+    maxTurnover: grade.maxTurnover === null ? null : toNumber(toDecimal(grade.maxTurnover)),
+    commissionRate: toNumber(toDecimal(grade.commissionRate)),
   }))
 }
 
@@ -83,8 +84,8 @@ export async function getMotivationSummaryForManagers(
     }),
   ])
 
-  const factTurnover = Number(factAgg._sum.budget || 0)
-  const hotTurnover = Number(hotAgg._sum.budget || 0)
+  const factTurnover = toDecimal(factAgg._sum.budget || 0)
+  const hotTurnover = toDecimal(hotAgg._sum.budget || 0)
 
   return {
     grades,

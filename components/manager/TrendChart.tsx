@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import { calcPercent, roundPercent, toDecimal } from '@/lib/utils/decimal'
 
 interface TrendDataPoint {
   date: string
@@ -15,7 +16,7 @@ interface TrendChartProps {
 export const TrendChart = memo(function TrendChart({ data }: TrendChartProps) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
+      <div className="text-center py-12 text-[var(--muted-foreground)]">
         Недостаточно данных для построения графика
       </div>
     )
@@ -28,16 +29,18 @@ export const TrendChart = memo(function TrendChart({ data }: TrendChartProps) {
     <div className="space-y-6">
       {/* Продажи */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-600 mb-3">Продажи</h4>
+        <h4 className="text-sm font-semibold text-[var(--muted-foreground)] mb-3">Продажи</h4>
         <div className="space-y-2">
-          {data.map((point, index) => {
-            const widthPercent = maxSales > 0 ? (point.sales / maxSales) * 100 : 0
+          {data.map((point) => {
+            const widthPercent = maxSales > 0
+              ? Math.min(100, roundPercent(calcPercent(toDecimal(point.sales), toDecimal(maxSales))))
+              : 0
             return (
-              <div key={index} className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 w-20">{point.date}</span>
-                <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden">
+              <div key={point.date} className="flex items-center gap-3">
+                <span className="text-xs text-[var(--muted-foreground)] w-20">{point.date}</span>
+                <div className="flex-1 h-8 bg-[var(--muted)]/40 rounded-lg overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-blue-400 to-blue-600 flex items-center justify-end pr-2 text-white text-xs font-semibold"
+                    className="h-full bg-[var(--primary)] flex items-center justify-end pr-2 text-[var(--primary-foreground)] text-xs font-semibold"
                     style={{ width: `${widthPercent}%` }}
                   >
                     {widthPercent > 15 && `${point.sales.toLocaleString('ru-RU')} ₽`}
@@ -51,16 +54,16 @@ export const TrendChart = memo(function TrendChart({ data }: TrendChartProps) {
 
       {/* Сделки */}
       <div>
-        <h4 className="text-sm font-semibold text-gray-600 mb-3">Сделки</h4>
+        <h4 className="text-sm font-semibold text-[var(--muted-foreground)] mb-3">Сделки</h4>
         <div className="space-y-2">
-          {data.map((point, index) => {
+          {data.map((point) => {
             const widthPercent = maxDeals > 0 ? (point.deals / maxDeals) * 100 : 0
             return (
-              <div key={index} className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 w-20">{point.date}</span>
-                <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden">
+              <div key={point.date} className="flex items-center gap-3">
+                <span className="text-xs text-[var(--muted-foreground)] w-20">{point.date}</span>
+                <div className="flex-1 h-8 bg-[var(--muted)]/40 rounded-lg overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-green-400 to-green-600 flex items-center justify-end pr-2 text-white text-xs font-semibold"
+                    className="h-full bg-[var(--success)] flex items-center justify-end pr-2 text-[var(--status-foreground)] text-xs font-semibold"
                     style={{ width: `${widthPercent}%` }}
                   >
                     {widthPercent > 15 && `${point.deals} шт`}

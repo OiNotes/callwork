@@ -1,8 +1,9 @@
 import { MOTIVATION_GRADE_PRESETS, MotivationGradeConfig } from '@/lib/config/motivationGrades'
+import { roundMoney, toDecimal, toNumber, type Decimal } from '@/lib/utils/decimal'
 
 export interface MotivationCalculationInput {
-  factTurnover: number
-  hotTurnover: number
+  factTurnover: number | string | Decimal
+  hotTurnover: number | string | Decimal
   grades?: MotivationGradeConfig[]
   forecastWeight?: number
 }
@@ -22,15 +23,23 @@ export interface MotivationCalculationResult {
 const DEFAULT_FORECAST_WEIGHT = 0.5
 
 export function resolveCommissionRate(
-  turnover: number,
+  turnover: number | string | Decimal,
   grades?: MotivationGradeConfig[]
 ): number {
   const source = grades && grades.length > 0 ? grades : MOTIVATION_GRADE_PRESETS
-  const sorted = [...source].sort((a, b) => a.minTurnover - b.minTurnover)
+  const sorted = [...source].sort(
+    (a, b) => toDecimal(a.minTurnover).comparedTo(toDecimal(b.minTurnover))
+  )
+  const turnoverValue = toDecimal(turnover)
 
   for (const grade of sorted) {
-    const max = grade.maxTurnover ?? Number.POSITIVE_INFINITY
-    if (turnover >= grade.minTurnover && turnover < max) {
+    const min = toDecimal(grade.minTurnover)
+    const max = grade.maxTurnover === null || grade.maxTurnover === undefined
+      ? null
+      : toDecimal(grade.maxTurnover)
+    const withinLowerBound = turnoverValue.greaterThanOrEqualTo(min)
+    const withinUpperBound = max ? turnoverValue.lessThan(max) : true
+    if (withinLowerBound && withinUpperBound) {
       return grade.commissionRate
     }
   }
@@ -43,28 +52,28 @@ export function calculateMotivation(
 ): MotivationCalculationResult {
   const { factTurnover, hotTurnover, grades, forecastWeight = DEFAULT_FORECAST_WEIGHT } = input
 
-  const safeFact = Number.isFinite(factTurnover) ? factTurnover : 0
-  const safeHot = Number.isFinite(hotTurnover) ? hotTurnover : 0
+  const safeFact = toDecimal(factTurnover)
+  const safeHot = toDecimal(hotTurnover)
 
-  const forecastTurnover = safeHot * forecastWeight
-  const totalPotentialTurnover = safeFact + forecastTurnover
+  const forecastTurnover = safeHot.times(forecastWeight)
+  const totalPotentialTurnover = safeFact.plus(forecastTurnover)
 
   const factRate = resolveCommissionRate(safeFact, grades)
   const forecastRate = resolveCommissionRate(totalPotentialTurnover, grades)
 
-  const salaryFact = safeFact * factRate
-  const salaryForecast = totalPotentialTurnover * forecastRate
-  const potentialGain = salaryForecast - salaryFact
+  const salaryFact = safeFact.times(factRate)
+  const salaryForecast = totalPotentialTurnover.times(forecastRate)
+  const potentialGain = salaryForecast.minus(salaryFact)
 
   return {
-    factTurnover: safeFact,
-    hotTurnover: safeHot,
-    forecastTurnover,
-    totalPotentialTurnover,
+    factTurnover: toNumber(roundMoney(safeFact)),
+    hotTurnover: toNumber(roundMoney(safeHot)),
+    forecastTurnover: toNumber(roundMoney(forecastTurnover)),
+    totalPotentialTurnover: toNumber(roundMoney(totalPotentialTurnover)),
     factRate,
     forecastRate,
-    salaryFact,
-    salaryForecast,
-    potentialGain,
+    salaryFact: toNumber(roundMoney(salaryFact)),
+    salaryForecast: toNumber(roundMoney(salaryForecast)),
+    potentialGain: toNumber(roundMoney(potentialGain)),
   }
 }

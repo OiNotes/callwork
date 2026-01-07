@@ -1,8 +1,9 @@
-import { Report } from '@prisma/client'
+import type { Report } from '@prisma/client'
 import type { ManagerStats } from '@/lib/analytics/funnel.client'
 import { GoalService } from '@/lib/services/GoalService'
 import { computeConversions } from '@/lib/calculations/metrics'
 import { PLAN_HEURISTICS } from '@/lib/config/metrics'
+import { roundMoney, toDecimal, toNumber, type Decimal } from '@/lib/utils/decimal'
 type PlanMode = 'team' | 'user'
 
 // Re-export types and client functions from funnel.client.ts
@@ -16,16 +17,40 @@ export { BENCHMARKS, getHeatmapColor, getFunnelData, analyzeRedZones, calculateM
  * ВАЖНО: Эта функция только для серверных компонентов/API routes!
  * Для клиентских компонентов используйте calculateManagerStatsClient из '@/lib/analytics/funnel.client'
  */
+type ReportStatsInput = Pick<
+  Report,
+  | 'zoomAppointments'
+  | 'pzmConducted'
+  | 'vzmConducted'
+  | 'contractReviewCount'
+  | 'pushCount'
+  | 'successfulDeals'
+  | 'monthlySalesAmount'
+  | 'refusalsCount'
+  | 'warmingUpCount'
+>
+
 export async function calculateManagerStats(
-  reports: Report[],
+  reports: ReportStatsInput[],
   managerId: string,
   options?: { salesPerDeal?: number; planMode?: PlanMode; planSalesOverride?: number }
 ): Promise<Omit<ManagerStats, 'id' | 'name'>> {
   const salesPerDeal = options?.salesPerDeal ?? PLAN_HEURISTICS.SALES_PER_DEAL
   const planMode: PlanMode = options?.planMode ?? 'team'
-  const totals = reports.reduce(
+  type Totals = {
+    zoomBooked: number
+    zoom1Held: number
+    zoom2Held: number
+    contractReview: number
+    pushCount: number
+    successfulDeals: number
+    salesAmount: Decimal
+    refusals: number
+    warming: number
+  }
+  const totals = reports.reduce<Totals>(
     (acc, report) => {
-      const pushCount = (report as any).pushCount ?? report.contractReviewCount ?? 0
+      const pushCount = report.pushCount ?? report.contractReviewCount ?? 0
 
       return {
         zoomBooked: acc.zoomBooked + report.zoomAppointments,
@@ -34,7 +59,7 @@ export async function calculateManagerStats(
         contractReview: acc.contractReview + report.contractReviewCount,
         pushCount: acc.pushCount + pushCount,
         successfulDeals: acc.successfulDeals + report.successfulDeals,
-        salesAmount: acc.salesAmount + Number(report.monthlySalesAmount),
+        salesAmount: acc.salesAmount.plus(toDecimal(report.monthlySalesAmount)),
         refusals: acc.refusals + (report.refusalsCount || 0),
         warming: acc.warming + (report.warmingUpCount || 0),
       }
@@ -46,11 +71,12 @@ export async function calculateManagerStats(
       contractReview: 0,
       pushCount: 0,
       successfulDeals: 0,
-      salesAmount: 0,
+      salesAmount: toDecimal(0),
       refusals: 0,
       warming: 0,
     }
   )
+  const salesAmount = toNumber(roundMoney(totals.salesAmount))
 
   const { stages, northStar, totalConversion } = computeConversions({
     zoomBooked: totals.zoomBooked,
@@ -69,7 +95,12 @@ export async function calculateManagerStats(
       : planMode === 'user'
       ? await GoalService.getUserGoal(managerId)
       : await GoalService.getTeamGoal(managerId)
-  const planDeals = Math.max(1, Math.round(planSales / salesPerDeal))
+  const resolvedPlanSales = planSales ?? 0
+  const planSalesDecimal = toDecimal(resolvedPlanSales)
+  const planDeals =
+    resolvedPlanSales > 0
+      ? planSalesDecimal.dividedBy(salesPerDeal).toDecimalPlaces(0).toNumber()
+      : 0
 
   // Рассчитываем активность на основе реальных данных
   const expectedActivity = totals.zoomBooked > 0 ? 100 : 0
@@ -80,11 +111,14 @@ export async function calculateManagerStats(
   const activityScore = Math.round((expectedActivity + actualActivity) / 2)
 
   // Определяем тренд на основе прогресса к цели
-  const progress = planSales > 0 ? (totals.salesAmount / planSales) * 100 : 0
+  const progress = resolvedPlanSales > 0
+    ? totals.salesAmount.dividedBy(planSalesDecimal).times(100).toNumber()
+    : 0
   const trend = progress >= 80 ? 'up' : progress >= 50 ? 'flat' : 'down'
 
   return {
     ...totals,
+    salesAmount,
     bookedToZoom1: (convMap.zoom1Held as number) || 0,
     zoom1ToZoom2: (convMap.zoom2Held as number) || 0,
     zoom2ToContract: (convMap.contractReview as number) || 0,
@@ -92,7 +126,7 @@ export async function calculateManagerStats(
     pushToDeal: (convMap.deal as number) || 0,
     northStar,
     totalConversion,
-    planSales,
+    planSales: resolvedPlanSales,
     planDeals,
     activityScore,
     trend,

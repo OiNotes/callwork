@@ -10,6 +10,23 @@ export async function resolveAccessibleManagerIds(
   user: SessionUser,
   requestedId: string | null
 ): Promise<string[]> {
+  if (user.role === 'ADMIN') {
+    if (!requestedId || requestedId === 'all') {
+      const users = await prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      })
+      return users.length > 0 ? users.map((member) => member.id) : [user.id]
+    }
+
+    const requestedUser = await prisma.user.findFirst({
+      where: { id: requestedId, isActive: true },
+      select: { id: true },
+    })
+
+    return requestedUser ? [requestedUser.id] : [user.id]
+  }
+
   if (user.role !== 'MANAGER') {
     return [user.id]
   }

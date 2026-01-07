@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -24,11 +24,11 @@ export interface ButtonProps extends BaseButtonProps {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] focus:ring-[var(--primary)]',
+  primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] focus:ring-[var(--primary)]',
   secondary: 'bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--accent)] border border-[var(--border)]',
   ghost: 'bg-transparent text-[var(--foreground)] hover:bg-[var(--muted)]',
-  danger: 'bg-[var(--danger)] text-white hover:opacity-90 focus:ring-[var(--danger)]',
-  success: 'bg-[var(--success)] text-white hover:opacity-90 focus:ring-[var(--success)]',
+  danger: 'bg-[var(--danger)] text-[var(--status-foreground)] hover:opacity-90 focus:ring-[var(--danger)]',
+  success: 'bg-[var(--success)] text-[var(--status-foreground)] hover:opacity-90 focus:ring-[var(--success)]',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -64,7 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           'inline-flex items-center justify-center font-medium rounded-[var(--radius-md)]',
           'transition-colors duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-offset-2',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--background)]',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           variantStyles[variant],
           sizeStyles[size],

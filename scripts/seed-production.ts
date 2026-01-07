@@ -2,7 +2,7 @@
  * seed-production.ts - Единый seed скрипт с реалистичными тестовыми данными
  *
  * Создаёт:
- * - 1 Менеджер (manager@callwork.com / password123)
+ * - 1 Менеджер (manager@callwork.com / пароль из SEED_PASSWORD)
  * - 5 Сотрудников с разной активностью (top/average/weak)
  * - 30 дней отчётов с реалистичной воронкой
  * - RopSettings с бенчмарками конверсии
@@ -12,7 +12,8 @@
  */
 
 import { PrismaClient, Role, DealStatus, PaymentStatus } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { resolvePasswordHash } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -220,7 +221,7 @@ async function main() {
 
   // 1. Создаём менеджера
   console.log('\n👔 Создаю менеджера...')
-  const hashedPassword = await bcrypt.hash('password123', 10)
+  const hashedPassword = await resolvePasswordHash({ label: 'seed password' })
 
   const manager = await prisma.user.create({
     data: {
@@ -340,7 +341,7 @@ async function main() {
     _count: true
   })
 
-  console.log(`👔 Менеджер: manager@callwork.com / password123`)
+  console.log('👔 Менеджер: manager@callwork.com (пароль задан через SEED_PASSWORD)')
   console.log(`👥 Сотрудников: ${employees.length}`)
   console.log(`📊 Отчётов: ${stats._count}`)
   console.log(`💰 Общая выручка: ${Number(stats._sum.monthlySalesAmount || 0).toLocaleString('ru-RU')} ₽`)
@@ -350,12 +351,12 @@ async function main() {
   console.log('\n🎉 Seed завершён успешно!')
   console.log('\n📌 Для входа используйте:')
   console.log('   Email: manager@callwork.com')
-  console.log('   Пароль: password123')
+  console.log('   Пароль: (set via SEED_PASSWORD)')
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Ошибка seed:', e)
+    logError('Ошибка seed', e)
     process.exit(1)
   })
   .finally(async () => {

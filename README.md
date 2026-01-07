@@ -2,12 +2,33 @@
 
 Система учёта статистики call-центра с веб-дашбордом и Telegram ботом для сбора отчётов.
 
+## Quick Start
+
+1. Install dependencies: `npm ci`
+2. Copy `.env.example` to `.env` and fill required values
+3. Run migrations: `npx prisma migrate deploy`
+4. Build and start: `npm run build && npm start`
+5. Start the bot: `npm run bot:start`
+
+## Documentation
+
+- docs/DEPLOYMENT.md
+- docs/ADMIN_GUIDE.md
+- docs/BUSINESS_RULES.md
+- docs/CRON_SETUP.md
+- docs/analytics.md
+- docs/motivation.md
+
+## Support
+
+This project is delivered as-is with no ongoing support included.
+
 ## 🚀 Быстрый старт (локально)
 
 ### 1️⃣ Установка зависимостей
 
 ```bash
-cd "/Users/sile/Documents/Status Stock 4.0/Call stat/callwork"
+cd /path/to/callwork
 npm install
 ```
 
@@ -23,14 +44,24 @@ cp .env.example .env
 
 ```env
 # PostgreSQL база данных (можно использовать локальную или Neon.tech)
-DATABASE_URL="postgresql://user:password@localhost:5432/callwork"
+DATABASE_URL="postgresql://user:<db_password>@localhost:5432/callwork"
 
 # NextAuth секрет (сгенерируйте через: openssl rand -base64 32)
 NEXTAUTH_SECRET="ваш-секретный-ключ"
 NEXTAUTH_URL="http://localhost:3000"
 
 # Telegram Bot токен (получите у @BotFather)
-TELEGRAM_BOT_TOKEN="123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+TELEGRAM_BOT_TOKEN="<telegram_bot_token>"
+
+# CRON secret for /api/cron/check-alerts
+CRON_SECRET="your-cron-secret-here"
+
+# Docker (если используете docker-compose)
+POSTGRES_PASSWORD="<postgres_password>"
+PGADMIN_DEFAULT_PASSWORD="<pgadmin_password>"
+
+# Seed scripts (опционально)
+SEED_PASSWORD="<seed_password>"
 ```
 
 ### 3️⃣ Настройка базы данных
@@ -149,7 +180,7 @@ npm run bot:dev
 ## 🛠 Технологии
 
 ### Frontend
-- **Next.js 14** (App Router)
+- **Next.js 16** (App Router)
 - **React 19** + TypeScript
 - **Tailwind CSS v4** (Apple-style дизайн)
 - **Framer Motion** (анимации)

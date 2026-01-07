@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Users, ChevronDown, Check } from 'lucide-react'
 
 interface ManagerSelectorProps {
@@ -39,6 +39,16 @@ export function ManagerSelector({
   }, [])
 
   const isVertical = orientation === 'vertical'
+  const toggleOpen = useCallback(() => {
+    setIsOpen((prev) => !prev)
+  }, [])
+
+  const handleSelect = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const id = event.currentTarget.dataset.managerId
+    if (!id) return
+    onSelectManager(id)
+    setIsOpen(false)
+  }, [onSelectManager])
 
   return (
     <div 
@@ -65,7 +75,10 @@ export function ManagerSelector({
         {isVertical ? (
             // Vertical Button (Compact)
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleOpen}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-label="Выбрать сотрудника"
                 className="w-10 h-10 mx-auto flex items-center justify-center bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--foreground)] text-xs font-bold rounded-full transition-colors duration-200 border border-transparent focus:border-[var(--primary)] outline-none"
             >
                 {displayInitials}
@@ -73,7 +86,10 @@ export function ManagerSelector({
         ) : (
             // Horizontal Button (Full)
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleOpen}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-label="Выбрать сотрудника"
                 className="w-full flex items-center justify-between bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--foreground)] text-sm font-medium px-3 py-2 rounded-lg transition-colors duration-200 border border-transparent focus:border-[var(--primary)] outline-none"
             >
                 <span className="truncate">{displayName}</span>
@@ -97,10 +113,8 @@ export function ManagerSelector({
              )}
 
             <button
-              onClick={() => {
-                onSelectManager('all')
-                setIsOpen(false)
-              }}
+              data-manager-id="all"
+              onClick={handleSelect}
               className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-[var(--secondary)] transition-colors"
             >
               <span className={selectedManagerId === 'all' ? 'text-[var(--primary)] font-medium' : 'text-[var(--foreground)]'}>
@@ -114,10 +128,8 @@ export function ManagerSelector({
             {managers.map((manager) => (
               <button
                 key={manager.id}
-                onClick={() => {
-                  onSelectManager(manager.id)
-                  setIsOpen(false)
-                }}
+                data-manager-id={manager.id}
+                onClick={handleSelect}
                 className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-[var(--secondary)] transition-colors"
               >
                 <span className={selectedManagerId === manager.id ? 'text-[var(--primary)] font-medium' : 'text-[var(--foreground)]'}>

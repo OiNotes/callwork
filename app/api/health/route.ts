@@ -1,23 +1,44 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import crypto from 'crypto'
 
-export async function GET() {
+function verifyBearerToken(authHeader: string | null, secret: string | undefined): boolean {
+  if (!authHeader || !secret) return false
+
+  const prefix = 'Bearer '
+  if (!authHeader.startsWith(prefix)) return false
+
+  const providedToken = authHeader.slice(prefix.length)
+  const providedBuffer = Buffer.from(providedToken.padEnd(64, '\0'))
+  const expectedBuffer = Buffer.from(secret.padEnd(64, '\0'))
+
+  return crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+}
+
+export async function GET(request: Request) {
+  const secret = process.env.HEALTH_SECRET
+  const hasAccess = !secret || verifyBearerToken(request.headers.get('authorization'), secret)
+
+  if (!hasAccess) {
+    return NextResponse.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    })
+  }
+
   try {
     await prisma.$queryRaw`SELECT 1`
 
     return NextResponse.json({
-      status: 'ok',
+      status: 'healthy',
       timestamp: new Date().toISOString(),
-      database: 'connected',
     })
   } catch (error) {
     return NextResponse.json(
       {
-        status: 'error',
-        database: 'disconnected',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'unhealthy',
       },
-      { status: 500 }
+      { status: 503 }
     )
   }
 }

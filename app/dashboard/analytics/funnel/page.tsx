@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { TrendingDown, AlertCircle, ArrowLeft } from 'lucide-react'
-import { InteractiveFunnelChart } from '@/components/analytics/InteractiveFunnelChart'
 import { EmployeeDrillDown } from '@/components/analytics/EmployeeDrillDown'
 import { useRouter } from 'next/navigation'
 import { subDays, startOfMonth, endOfMonth } from 'date-fns'
 import { PeriodSelector, PeriodPreset } from '@/components/filters/PeriodSelector'
+import { logError } from '@/lib/logger'
+import dynamic from 'next/dynamic'
+import { SkeletonChart } from '@/components/ui/SkeletonChart'
 
 interface FunnelStage {
   stage: string
@@ -52,6 +54,17 @@ const pageVariants = {
   }
 }
 
+const InteractiveFunnelChart = dynamic(
+  () =>
+    import('@/components/analytics/InteractiveFunnelChart').then((mod) => ({
+      default: mod.InteractiveFunnelChart,
+    })),
+  {
+    loading: () => <SkeletonChart />,
+    ssr: false,
+  }
+)
+
 export default function FunnelPage() {
   const router = useRouter()
   const [data, setData] = useState<FunnelData | null>(null)
@@ -65,6 +78,10 @@ export default function FunnelPage() {
   })
   const [managers, setManagers] = useState<{ id: string; name: string }[]>([])
   const [selectedManager, setSelectedManager] = useState<string>('all')
+
+  const handleBack = useCallback(() => {
+    router.back()
+  }, [router])
 
   const fetchFunnelData = useCallback(async () => {
     setLoading(true)
@@ -96,7 +113,7 @@ export default function FunnelPage() {
       ).map(([id, name]) => ({ id: id as string, name: name as string }))
       setManagers(uniqueManagers)
     } catch (err) {
-      console.error('Failed to fetch funnel:', err)
+      logError('Failed to fetch funnel', err)
       setError(err instanceof Error ? err.message : 'Произошла ошибка')
     } finally {
       setLoading(false)
@@ -128,19 +145,23 @@ export default function FunnelPage() {
     }
   }
 
+  const handlePresetChange = useCallback((preset: PeriodPreset, nextRange?: { start: Date; end: Date }) => {
+    updateDatePreset(preset, nextRange)
+  }, [updateDatePreset])
+
 
   return (
     <motion.div
       variants={pageVariants}
       initial="hidden"
       animate="visible"
-      className="min-h-screen bg-gradient-to-br from-[#F5F5F7] to-[#E5E5E7] p-8"
+      className="min-h-screen bg-gradient-to-br from-[var(--background)] via-[var(--background)] to-[var(--secondary)] p-8"
     >
       {/* Header */}
       <div className="mb-8">
         <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-[#007AFF] hover:text-[#0051D5] mb-4 transition-colors duration-200"
+          onClick={handleBack}
+          className="flex items-center gap-2 text-[var(--primary)] hover:text-[var(--primary-hover)] mb-4 transition-colors duration-200"
         >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Назад</span>
@@ -149,12 +170,12 @@ export default function FunnelPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <TrendingDown className="w-8 h-8 text-[#007AFF]" />
-                  <h1 className="text-4xl font-bold text-[#1D1D1F]">
+                  <TrendingDown className="w-8 h-8 text-[var(--primary)]" />
+                  <h1 className="text-4xl font-bold text-[var(--foreground)]">
                     Рентген воронки продаж
                   </h1>
                 </div>
-                <p className="text-[#86868B]">
+                <p className="text-[var(--muted-foreground)]">
                   Анализ конверсий на каждом этапе продаж с детализацией по сотрудникам
                 </p>
             </div>
@@ -164,16 +185,16 @@ export default function FunnelPage() {
             <PeriodSelector
               selectedPreset={datePreset}
               range={dateRange}
-              onPresetChange={(preset, next) => updateDatePreset(preset, next)}
+              onPresetChange={handlePresetChange}
               title="Период"
             />
 
-            <div className="bg-white rounded-2xl p-4 shadow-md border border-[#E5E5E7]">
-              <p className="text-xs text-[#86868B] mb-2">Менеджер</p>
+            <div className="bg-[var(--card)] rounded-2xl p-4 shadow-[var(--shadow-sm)] border border-[var(--border)]">
+              <p className="text-xs text-[var(--muted-foreground)] mb-2">Менеджер</p>
               <select
                 value={selectedManager}
                 onChange={(e) => setSelectedManager(e.target.value)}
-                className="rounded-lg border border-[#E5E5E7] px-3 py-2 text-sm"
+                className="rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
               >
                 <option value="all">Вся команда</option>
                 {managers.map((manager) => (
@@ -189,34 +210,34 @@ export default function FunnelPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="bg-white rounded-2xl shadow-lg border border-[#E5E5E7] p-12">
+        <div className="bg-[var(--card)] rounded-2xl shadow-lg border border-[var(--border)] p-12">
           <div className="flex flex-col items-center justify-center">
             <div className="relative w-16 h-16 mb-6">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="absolute inset-0 rounded-full border-4 border-[#E5E5E7] border-t-[#007AFF]"
+                className="absolute inset-0 rounded-full border-4 border-[var(--border)] border-t-[var(--primary)]"
               />
             </div>
-            <p className="text-lg font-medium text-[#86868B]">
+            <p className="text-lg font-medium text-[var(--muted-foreground)]">
               Загрузка данных воронки...
             </p>
           </div>
         </div>
       ) : error ? (
-        <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-2xl p-8 shadow-lg">
+        <div className="bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-2xl p-8 shadow-lg">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 rounded-full bg-[var(--danger)]/15 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-6 h-6 text-[var(--danger)]" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-[#1D1D1F] mb-2">
+              <h2 className="text-xl font-semibold text-[var(--foreground)] mb-2">
                 Ошибка загрузки данных
               </h2>
-              <p className="text-[#86868B] mb-4">{error}</p>
+              <p className="text-[var(--muted-foreground)] mb-4">{error}</p>
               <button
                 onClick={fetchFunnelData}
-                className="px-6 py-2 bg-[#007AFF] text-white rounded-lg font-medium hover:bg-[#0051D5] transition-colors duration-200"
+                className="px-6 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg font-medium hover:bg-[var(--primary-hover)] transition-colors duration-200"
               >
                 Повторить попытку
               </button>
@@ -226,12 +247,12 @@ export default function FunnelPage() {
       ) : data ? (
         <>
           {data.funnel.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-lg border border-[#E5E5E7] p-12 text-center">
-              <TrendingDown className="w-16 h-16 text-[#86868B] mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-[#1D1D1F] mb-2">
+            <div className="bg-[var(--card)] rounded-2xl shadow-lg border border-[var(--border)] p-12 text-center">
+              <TrendingDown className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">
                 Нет данных за выбранный период
               </h3>
-              <p className="text-[#86868B]">
+              <p className="text-[var(--muted-foreground)]">
                 Попробуйте выбрать другой период или убедитесь, что есть активность
               </p>
             </div>
@@ -260,15 +281,15 @@ export default function FunnelPage() {
 
       {!loading && !error && data?.sideFlow && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          <div className="bg-white rounded-2xl shadow-md border border-[#E5E5E7] p-6">
-            <h3 className="text-lg font-semibold text-[#1D1D1F] mb-4">Отказы по этапам</h3>
+          <div className="bg-[var(--card)] rounded-2xl shadow-md border border-[var(--border)] p-6">
+            <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">Отказы по этапам</h3>
             <div className="space-y-2">
               {data.sideFlow.refusals.byStage.map((item) => (
                 <div key={item.stageId} className="flex items-center justify-between text-sm">
-                  <span className="text-[#1D1D1F]">{item.label}</span>
+                  <span className="text-[var(--foreground)]">{item.label}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-[#86868B]">{item.count}</span>
-                    <span className={`font-semibold ${item.rate > 20 ? 'text-[#FF3B30]' : 'text-green-600'}`}>
+                    <span className="text-[var(--muted-foreground)]">{item.count}</span>
+                    <span className={`font-semibold ${item.rate > 20 ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
                       {item.rate.toFixed(1)}%
                     </span>
                   </div>
@@ -276,17 +297,17 @@ export default function FunnelPage() {
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-md border border-[#E5E5E7] p-6">
-            <h3 className="text-lg font-semibold text-[#1D1D1F] mb-2">Главный KPI</h3>
-            <p className="text-sm text-[#86868B] mb-4">1-й Zoom → Оплата</p>
+          <div className="bg-[var(--card)] rounded-2xl shadow-md border border-[var(--border)] p-6">
+            <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">Главный KPI</h3>
+            <p className="text-sm text-[var(--muted-foreground)] mb-4">1-й Zoom → Оплата</p>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold text-[#1D1D1F]">{data.northStarKpi?.value.toFixed(1)}%</p>
-                <p className="text-xs text-[#86868B]">Цель: {data.northStarKpi?.target}%</p>
+                <p className="text-3xl font-bold text-[var(--foreground)]">{data.northStarKpi?.value.toFixed(1)}%</p>
+                <p className="text-xs text-[var(--muted-foreground)]">Цель: {data.northStarKpi?.target}%</p>
               </div>
               <div
                 className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  data.northStarKpi?.isOnTrack ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+                  data.northStarKpi?.isOnTrack ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--warning)]/10 text-[var(--warning)]'
                 }`}
               >
                 {data.northStarKpi?.isOnTrack ? 'В норме' : 'Ниже цели'}
@@ -302,40 +323,40 @@ export default function FunnelPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6"
+          className="mt-8 bg-[var(--secondary)]/70 border border-[var(--border)] rounded-2xl p-6"
         >
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 rounded-full bg-[var(--primary)]/15 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5 text-[var(--primary)]" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-[#1D1D1F] mb-2">
+              <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
                 Как пользоваться анализом воронки
               </h3>
-              <ul className="space-y-2 text-sm text-[#86868B]">
+              <ul className="space-y-2 text-sm text-[var(--muted-foreground)]">
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold">•</span>
+                  <span className="text-[var(--primary)] font-bold">•</span>
                   <span>
-                    <strong className="text-[#1D1D1F]">Нажмите на этап</strong> воронки для просмотра детализации по сотрудникам
+                    <strong className="text-[var(--foreground)]">Нажмите на этап</strong> воронки для просмотра детализации по сотрудникам
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-red-600 font-bold">•</span>
+                  <span className="text-[var(--danger)] font-bold">•</span>
                   <span>
-                    <strong className="text-[#1D1D1F]">Красные зоны</strong> — этапы с низкой конверсией, требующие внимания
+                    <strong className="text-[var(--foreground)]">Красные зоны</strong> — этапы с низкой конверсией, требующие внимания
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">•</span>
+                  <span className="text-[var(--success)] font-bold">•</span>
                   <span>
-                    <strong className="text-[#1D1D1F]">Зелёные зоны</strong> — этапы с хорошей конверсией (&gt;70%)
+                    <strong className="text-[var(--foreground)]">Зелёные зоны</strong> — этапы с хорошей конверсией (&gt;70%)
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-blue-600 font-bold">•</span>
+                  <span className="text-[var(--primary)] font-bold">•</span>
                   <span>
-                    Используйте фильтры <strong className="text-[#1D1D1F]">TOP-3</strong> и{' '}
-                    <strong className="text-[#1D1D1F]">BOTTOM-3</strong> для быстрого анализа производительности
+                    Используйте фильтры <strong className="text-[var(--foreground)]">TOP-3</strong> и{' '}
+                    <strong className="text-[var(--foreground)]">BOTTOM-3</strong> для быстрого анализа производительности
                   </span>
                 </li>
               </ul>

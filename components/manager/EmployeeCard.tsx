@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { AlertTriangle } from 'lucide-react'
 import { MetricBadge } from './MetricBadge'
 import { formatMoney } from '@/lib/utils/format'
@@ -47,6 +47,12 @@ export const EmployeeCard = memo(function EmployeeCard({ employee, stats, onClic
     }
     return name.charAt(0)
   }
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.currentTarget.click()
+    }
+  }
 
   return (
     <motion.div
@@ -55,11 +61,15 @@ export const EmployeeCard = memo(function EmployeeCard({ employee, stats, onClic
       animate="visible"
       whileHover="hover"
       onClick={onClick}
+      onKeyDown={handleKeyDown}
       className="glass-card p-6 border border-[var(--border)] cursor-pointer transition-all hover:border-[var(--primary)]/30"
+      role="button"
+      tabIndex={0}
+      aria-label={`Открыть профиль ${employee.name}`}
     >
       {/* Аватар и имя */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--info)] flex items-center justify-center text-white font-semibold text-lg shadow-md">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--info)] flex items-center justify-center text-[var(--primary-foreground)] font-semibold text-lg shadow-md">
           {getInitials(employee.name)}
         </div>
         <div>

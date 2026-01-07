@@ -47,23 +47,23 @@ function handleNewDeal(event: DemoEvent) {
 
   toast.success(
     <div className="flex items-center gap-3">
-      <div className="text-4xl">🎉</div>
-      <div>
-        <div className="font-bold text-lg">Новая сделка!</div>
-        <div className="text-sm text-slate-600">
-          {employeeName} • {formatRubles(amount || 0)}
+        <div className="text-4xl">🎉</div>
+        <div>
+          <div className="font-bold text-lg">Новая сделка!</div>
+          <div className="text-sm text-[var(--muted-foreground)]">
+            {employeeName} • {formatRubles(amount || 0)}
+          </div>
         </div>
-      </div>
-    </div>,
+      </div>,
     {
       duration: 4000,
       style: {
-        background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+        background: 'linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%)',
         border: 'none',
-        color: '#1A1D21',
+        color: 'var(--foreground)',
         padding: '16px 20px',
         fontSize: '16px',
-        boxShadow: '0 10px 40px rgba(255, 165, 0, 0.3)'
+        boxShadow: 'var(--shadow-md)'
       }
     }
   )
@@ -83,18 +83,18 @@ function handleNewCall(event: DemoEvent) {
       <div className="text-3xl">📞</div>
       <div>
         <div className="font-semibold">Новый звонок</div>
-        <div className="text-sm text-slate-600">{employeeName}</div>
+        <div className="text-sm text-[var(--muted-foreground)]">{employeeName}</div>
       </div>
     </div>,
     {
       duration: 2500,
       style: {
-        background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
+        background: 'linear-gradient(135deg, var(--success) 0%, var(--success) 100%)',
         border: 'none',
-        color: '#FFFFFF',
+        color: 'var(--primary-foreground)',
         padding: '12px 16px',
         fontSize: '14px',
-        boxShadow: '0 8px 30px rgba(16, 185, 129, 0.25)'
+        boxShadow: 'var(--shadow-md)'
       }
     }
   )
@@ -114,7 +114,7 @@ function handleMilestone(event: DemoEvent) {
       <div className="text-5xl">🏆</div>
       <div>
         <div className="font-bold text-xl">Milestone достигнут!</div>
-        <div className="text-lg text-slate-700">
+        <div className="text-lg text-[var(--muted-foreground)]">
           {milestone} • Всего: {formatRubles(totalSales || 0)}
         </div>
       </div>
@@ -122,12 +122,12 @@ function handleMilestone(event: DemoEvent) {
     {
       duration: 5000,
       style: {
-        background: 'linear-gradient(135deg, #2997FF 0%, #007AFF 100%)',
+        background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
         border: 'none',
-        color: '#FFFFFF',
+        color: 'var(--primary-foreground)',
         padding: '20px 24px',
         fontSize: '18px',
-        boxShadow: '0 15px 50px rgba(41, 151, 255, 0.4)'
+        boxShadow: 'var(--shadow-lg)'
       }
     }
   )
@@ -149,7 +149,7 @@ function handlePositionChange(event: DemoEvent) {
       <div className="text-4xl">⬆️</div>
       <div>
         <div className="font-bold text-lg">Смена позиции!</div>
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-[var(--muted-foreground)]">
           {employeeName} • #{position.from} → #{position.to}
         </div>
       </div>
@@ -157,12 +157,12 @@ function handlePositionChange(event: DemoEvent) {
     {
       duration: 3500,
       style: {
-        background: 'linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)',
+        background: 'linear-gradient(135deg, var(--info) 0%, var(--info) 100%)',
         border: 'none',
-        color: '#FFFFFF',
+        color: 'var(--primary-foreground)',
         padding: '16px 20px',
         fontSize: '16px',
-        boxShadow: '0 10px 40px rgba(59, 130, 246, 0.3)'
+        boxShadow: 'var(--shadow-md)'
       }
     }
   )

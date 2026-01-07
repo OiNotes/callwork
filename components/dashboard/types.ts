@@ -11,7 +11,7 @@ export interface DashboardUser {
   id: string
   name: string
   email: string
-  role: 'MANAGER' | 'EMPLOYEE'
+  role: 'MANAGER' | 'EMPLOYEE' | 'ADMIN'
 }
 
 // Report from API
@@ -34,7 +34,7 @@ export interface EmployeeData {
   id: string
   name: string
   email?: string
-  role?: 'MANAGER' | 'EMPLOYEE'
+  role?: 'MANAGER' | 'EMPLOYEE' | 'ADMIN'
   zoomBooked: number
   zoom1Held: number
   zoom2Held: number

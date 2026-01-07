@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Calendar, ChevronDown, X } from 'lucide-react'
 
 export type PeriodPreset = 'today' | 'week' | 'thisMonth' | 'lastMonth' | 'custom'
@@ -49,7 +49,7 @@ export function PeriodSelector({
     }
   }, [])
 
-  const handlePreset = (preset: PeriodPreset) => {
+  const handlePreset = useCallback((preset: PeriodPreset) => {
     const now = new Date()
     let start = new Date(range.start)
     let end = new Date(range.end)
@@ -80,7 +80,21 @@ export function PeriodSelector({
     if (preset !== 'custom') {
         setIsOpen(false)
     }
-  }
+  }, [onPresetChange, range.end, range.start])
+
+  const handlePresetClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const preset = event.currentTarget.dataset.preset as PeriodPreset | undefined
+    if (!preset) return
+    handlePreset(preset)
+  }, [handlePreset])
+
+  const toggleOpen = useCallback(() => {
+    setIsOpen((prev) => !prev)
+  }, [])
+
+  const closeOpen = useCallback(() => {
+    setIsOpen(false)
+  }, [])
 
   const handleCustomChange = (key: 'start' | 'end', value: string) => {
     const next = {
@@ -118,14 +132,20 @@ export function PeriodSelector({
       <div className={isVertical ? 'w-full' : 'relative'}>
         {isVertical ? (
              <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleOpen}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-label="Выбрать период"
                 className="w-10 h-10 mx-auto flex items-center justify-center bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--foreground)] text-xs font-bold rounded-full transition-colors duration-200 border border-transparent focus:border-[var(--primary)] outline-none"
              >
                 {activeShort}
              </button>
         ) : (
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleOpen}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-label="Выбрать период"
                 className="w-full flex items-center justify-between bg-[var(--secondary)] hover:bg-[var(--muted)] text-[var(--foreground)] text-sm font-medium px-3 py-2 rounded-lg transition-colors duration-200 border border-transparent focus:border-[var(--primary)] outline-none"
             >
                 <span className="truncate">{activeLabel}: {formattedRange}</span>
@@ -142,7 +162,7 @@ export function PeriodSelector({
             `}>
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-[var(--foreground)]">Выберите период</span>
-                    <button onClick={() => setIsOpen(false)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                    <button onClick={closeOpen} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -151,10 +171,11 @@ export function PeriodSelector({
                     {presets.map((item) => (
                     <button
                         key={item.key}
-                        onClick={() => handlePreset(item.key)}
+                        data-preset={item.key}
+                        onClick={handlePresetClick}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-center ${
                         selectedPreset === item.key
-                            ? 'bg-[var(--primary)] text-white shadow-sm'
+                            ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
                             : 'bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--muted)]'
                         }`}
                     >

@@ -64,7 +64,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-required={required}
             aria-describedby={error ? errorId : undefined}
             className={cn(
-              'flex w-full rounded-[var(--radius-md)] border bg-[var(--background)]',
+              'flex w-full rounded-[var(--radius-md)] border bg-[var(--input)]',
               'text-[var(--foreground)] text-base min-h-[44px] px-3 py-2',
               'placeholder:text-[var(--muted-foreground)]',
               'border-[var(--border)]',

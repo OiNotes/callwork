@@ -12,6 +12,7 @@
 import { prisma } from '@/lib/prisma'
 import { GoalService } from '@/lib/services/GoalService'
 import { Decimal } from '@prisma/client/runtime/library'
+import { logError } from '@/lib/logger'
 
 const args = process.argv.slice(2)
 
@@ -87,7 +88,7 @@ async function setUserGoal(userId: string, goal: number) {
   })
 
   if (!user) {
-    console.error(`❌ Пользователь ${userId} не найден`)
+    logError(`Пользователь ${userId} не найден`)
     return
   }
 
@@ -114,7 +115,7 @@ async function distributeTeamGoal(managerId: string) {
   })
 
   if (!manager) {
-    console.error(`❌ Менеджер ${managerId} не найден`)
+    logError(`Менеджер ${managerId} не найден`)
     return
   }
 
@@ -167,7 +168,7 @@ async function main() {
   } else if (hasFlag('distribute')) {
     const managerId = getArg('manager')
     if (!managerId) {
-      console.error('❌ Укажите --manager="id"')
+      logError('Укажите --manager="id"')
       process.exit(1)
     }
     await distributeTeamGoal(managerId)
@@ -188,6 +189,6 @@ Usage:
 }
 
 main().catch((error) => {
-  console.error('❌ Ошибка:', error)
+  logError('Ошибка при синхронизации целей', error)
   process.exit(1)
 })

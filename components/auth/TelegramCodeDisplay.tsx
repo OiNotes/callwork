@@ -40,28 +40,31 @@ export const TelegramCodeDisplay = memo(function TelegramCodeDisplay({ code, exp
   }, [code])
 
   return (
-    <div className="bg-gradient-to-br from-[#007AFF] to-[#0066D6] rounded-[16px] p-8 text-white transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]">
+    <div className="bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] rounded-[16px] p-8 text-[var(--primary-foreground)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]">
       <div className="text-center space-y-6">
         {/* Title */}
         <div>
           <h3 className="text-lg font-semibold mb-2">
             Код для привязки Telegram
           </h3>
-          <p className="text-sm text-white/80">
+          <p className="text-sm opacity-80">
             Используйте этот код в боте
           </p>
         </div>
 
         {/* Code Display */}
-        <div
-          className="bg-white/10 backdrop-blur-sm rounded-[12px] p-6 cursor-pointer transition-transform duration-200 hover:scale-102 active:scale-98"
+        <button
+          type="button"
           onClick={handleCopy}
+          onKeyDown={(event) => event.key === 'Enter' && handleCopy()}
+          aria-label="Скопировать код привязки"
+          className="bg-[var(--primary-foreground)]/10 backdrop-blur-sm rounded-[12px] p-6 w-full transition-transform duration-200 hover:scale-102 active:scale-98"
         >
           <div className="text-5xl font-bold tracking-wider mb-3">
             {code}
           </div>
           
-          <button className="inline-flex items-center gap-2 text-sm font-medium text-white/90 hover:text-white transition-all duration-200 active:scale-95">
+          <span className="inline-flex items-center gap-2 text-sm font-medium opacity-90 hover:opacity-100 transition-all duration-200 active:scale-95">
             {copied ? (
               <>
                 <Check className="w-4 h-4" />
@@ -73,33 +76,33 @@ export const TelegramCodeDisplay = memo(function TelegramCodeDisplay({ code, exp
                 <span>Нажмите чтобы скопировать</span>
               </>
             )}
-          </button>
-        </div>
+          </span>
+        </button>
 
         {/* Timer */}
         {timeLeft && (
-          <div className="flex items-center justify-center gap-2 text-sm text-white/80">
+          <div className="flex items-center justify-center gap-2 text-sm opacity-80">
             <Clock className="w-4 h-4" />
             <span>Действителен: {timeLeft}</span>
           </div>
         )}
 
         {/* Instructions */}
-        <div className="bg-white/5 rounded-[12px] p-4 text-left">
-          <p className="text-sm text-white/90 font-medium mb-3">
+        <div className="bg-[var(--primary-foreground)]/5 rounded-[12px] p-4 text-left">
+          <p className="text-sm opacity-90 font-medium mb-3">
             Как использовать:
           </p>
-          <ol className="space-y-2 text-sm text-white/80">
+          <ol className="space-y-2 text-sm opacity-80">
             <li className="flex gap-2">
-              <span className="font-semibold text-white">1.</span>
+              <span className="font-semibold">1.</span>
               <span>Откройте бота @CallworkBot в Telegram</span>
             </li>
             <li className="flex gap-2">
-              <span className="font-semibold text-white">2.</span>
+              <span className="font-semibold">2.</span>
               <span>Отправьте команду /register</span>
             </li>
             <li className="flex gap-2">
-              <span className="font-semibold text-white">3.</span>
+              <span className="font-semibold">3.</span>
               <span>Введите этот код</span>
             </li>
           </ol>

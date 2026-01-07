@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireManager } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 export async function GET() {
   try {
@@ -9,6 +10,7 @@ export async function GET() {
     const users = await prisma.user.findMany({
       where: {
         managerId: manager.id,
+        isActive: true,
       },
       select: {
         id: true,
@@ -26,7 +28,7 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json({ users })
+    return jsonWithPrivateCache({ users })
   } catch {
     return NextResponse.json(
       { error: 'Forbidden' },

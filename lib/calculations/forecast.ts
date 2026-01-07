@@ -5,10 +5,16 @@
  * @param monthlyGoal - Месячная цель продаж
  * @returns Объект с метриками прогноза
  */
+import { roundMoney, toDecimal, toNumber, type Decimal } from '@/lib/utils/decimal'
+
+const roundInt = (value: Decimal): number => value.toDecimalPlaces(0).toNumber()
+
 export function calculateMonthlyForecast(
   currentSales: number,
   monthlyGoal: number
 ) {
+  const sales = toDecimal(currentSales)
+  const goal = toDecimal(monthlyGoal)
   const today = new Date()
   const year = today.getFullYear()
   const month = today.getMonth()
@@ -23,52 +29,52 @@ export function calculateMonthlyForecast(
   const daysRemaining = daysInMonth - daysPassed
   
   // Средняя сумма продаж в день
-  const dailyAverage = daysPassed > 0 ? currentSales / daysPassed : 0
+  const dailyAverage = daysPassed > 0 ? sales.dividedBy(daysPassed) : toDecimal(0)
   
   // Прогноз на конец месяца (линейная экстраполяция)
-  const projectedTotal = dailyAverage * daysInMonth
+  const projectedTotal = dailyAverage.times(daysInMonth)
   
   // Процент выполнения прогноза от цели
-  const projectedCompletion = monthlyGoal > 0 
-    ? (projectedTotal / monthlyGoal) * 100 
-    : 0
+  const projectedCompletion = goal.greaterThan(0) 
+    ? projectedTotal.dividedBy(goal).times(100)
+    : toDecimal(0)
   
   // Ожидаемая сумма на текущий день (по плану)
-  const expectedByNow = (monthlyGoal / daysInMonth) * daysPassed
+  const expectedByNow = goal.dividedBy(daysInMonth).times(daysPassed)
   
   // Темп выполнения (pacing) - насколько опережаем/отстаём от плана
-  const pacing = expectedByNow > 0 
-    ? ((currentSales - expectedByNow) / expectedByNow) * 100 
-    : 0
+  const pacing = expectedByNow.greaterThan(0) 
+    ? sales.minus(expectedByNow).dividedBy(expectedByNow).times(100)
+    : toDecimal(0)
   
   // Хороший ли темп? (допуск -5%)
-  const isPacingGood = pacing >= -5
+  const isPacingGood = pacing.greaterThanOrEqualTo(-5)
   
   // Необходимая дневная сумма для достижения цели
   const dailyRequired = daysRemaining > 0 
-    ? (monthlyGoal - currentSales) / daysRemaining 
-    : 0
+    ? goal.minus(sales).dividedBy(daysRemaining)
+    : toDecimal(0)
 
   return {
     // Текущие значения
-    current: currentSales,
-    goal: monthlyGoal,
+    current: toNumber(roundMoney(sales)),
+    goal: toNumber(roundMoney(goal)),
     
     // Прогноз
-    projected: Math.round(projectedTotal),
-    completion: Math.round(projectedCompletion),
+    projected: roundInt(projectedTotal),
+    completion: roundInt(projectedCompletion),
     
     // Темп
-    pacing: Math.round(pacing),
+    pacing: roundInt(pacing),
     isPacingGood,
     
     // Расчётные показатели
     daysInMonth,
     daysPassed,
     daysRemaining,
-    dailyAverage: Math.round(dailyAverage),
-    dailyRequired: Math.round(dailyRequired),
-    expectedByNow: Math.round(expectedByNow),
+    dailyAverage: roundInt(dailyAverage),
+    dailyRequired: roundInt(dailyRequired),
+    expectedByNow: roundInt(expectedByNow),
   }
 }
 
@@ -85,44 +91,53 @@ export function generateForecastChartData(
   monthlyGoal: number,
   dailySales?: Array<{ day: number; sales: number }>
 ) {
+  const sales = toDecimal(currentSales)
+  const goal = toDecimal(monthlyGoal)
   const today = new Date()
   const year = today.getFullYear()
   const month = today.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const currentDay = today.getDate()
   
-  const data = []
-  
+  interface ChartPoint {
+    day: number
+    plan: number
+    actual?: number
+    forecast?: number
+  }
+
+  const data: ChartPoint[] = []
+
   // Расчёт среднего дневного значения
-  const dailyAverage = currentDay > 0 ? currentSales / currentDay : 0
-  const dailyPlan = monthlyGoal / daysInMonth
-  
-  let cumulativeSales = 0
-  
+  const dailyAverage = currentDay > 0 ? sales.dividedBy(currentDay) : toDecimal(0)
+  const dailyPlan = goal.dividedBy(daysInMonth)
+
+  let cumulativeSales = toDecimal(0)
+
   for (let day = 1; day <= daysInMonth; day++) {
-    const point: any = {
+    const point: ChartPoint = {
       day,
-      plan: Math.round(dailyPlan * day), // Линия плана
+      plan: roundInt(dailyPlan.times(day)), // Линия плана
     }
-    
+
     if (day <= currentDay) {
       // Факт (используем реальные данные если есть, иначе равномерное распределение)
       if (dailySales && dailySales.length > 0) {
         const dayData = dailySales.find(d => d.day === day)
-        cumulativeSales += dayData?.sales || 0
-        point.actual = cumulativeSales
+        cumulativeSales = cumulativeSales.plus(toDecimal(dayData?.sales ?? 0))
+        point.actual = roundInt(cumulativeSales)
       } else {
         // Равномерное распределение
-        cumulativeSales = Math.round(dailyAverage * day)
-        point.actual = cumulativeSales
+        cumulativeSales = dailyAverage.times(day)
+        point.actual = roundInt(cumulativeSales)
       }
     } else {
       // Прогноз (продолжаем линию тренда)
-      point.forecast = Math.round(currentSales + dailyAverage * (day - currentDay))
+      point.forecast = roundInt(sales.plus(dailyAverage.times(day - currentDay)))
     }
-    
+
     data.push(point)
   }
-  
+
   return data
 }

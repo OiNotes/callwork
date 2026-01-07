@@ -1,9 +1,10 @@
 'use client'
 
-import { memo, useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { memo, useState, useMemo, useCallback } from 'react'
+import { motion } from '@/lib/motion'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { TrendingDown, Users, AlertCircle } from 'lucide-react'
+import { TrendingDown, Users, AlertCircle, BarChart2 } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface FunnelStage {
   stage: string
@@ -17,6 +18,17 @@ interface InteractiveFunnelChartProps {
   onStageClick?: (stage: FunnelStage) => void
 }
 
+const isFunnelStage = (value: unknown): value is FunnelStage => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'stage' in value &&
+    'count' in value &&
+    'conversion_rate' in value &&
+    'is_red_zone' in value
+  )
+}
+
 // Анимационные варианты
 const chartVariants = {
   hidden: { opacity: 0, scale: 0.95 },
@@ -28,7 +40,14 @@ const chartVariants = {
 }
 
 // Кастомный Tooltip
-const CustomTooltip = ({ active, payload }: any) => {
+type TooltipPayload = { payload: FunnelStage }
+
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: TooltipPayload[]
+}
+
+const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (!active || !payload || !payload.length) return null
 
   const data = payload[0].payload
@@ -38,29 +57,30 @@ const CustomTooltip = ({ active, payload }: any) => {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl p-4 shadow-lg border border-[#E5E5E7]"
+      className="bg-[var(--card)] rounded-xl p-4 shadow-lg border border-[var(--border)]"
     >
-      <p className="text-sm font-semibold text-[#1D1D1F] mb-2">
+      <p className="text-sm font-semibold text-[var(--foreground)] mb-2">
         {data.stage}
       </p>
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-4">
-          <span className="text-xs text-[#86868B]">Количество:</span>
-          <span className="text-sm font-medium text-[#1D1D1F]">
+          <span className="text-xs text-[var(--muted-foreground)]">Количество:</span>
+          <span className="text-sm font-medium text-[var(--foreground)]">
             {data.count.toLocaleString('ru-RU')}
           </span>
         </div>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-xs text-[#86868B]">Конверсия:</span>
-          <span className={`text-sm font-medium ${isRedZone ? 'text-[#FF3B30]' : 'text-[#34C759]'
-            }`}>
+          <span className="text-xs text-[var(--muted-foreground)]">Конверсия:</span>
+          <span
+            className={`text-sm font-medium ${isRedZone ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}
+          >
             {data.conversion_rate.toFixed(1)}%
           </span>
         </div>
         {isRedZone && (
-          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#E5E5E7]">
-            <AlertCircle className="w-4 h-4 text-[#FF3B30]" />
-            <span className="text-xs text-[#FF3B30] font-medium">
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[var(--border)]">
+            <AlertCircle className="w-4 h-4 text-[var(--danger)]" />
+            <span className="text-xs text-[var(--danger)] font-medium">
               Красная зона
             </span>
           </div>
@@ -80,7 +100,9 @@ export const InteractiveFunnelChart = memo(function InteractiveFunnelChart({
   const stats = useMemo(() => {
     const totalStages = funnel.length
     const redZones = funnel.filter(s => s.is_red_zone).length
-    const avgConversion = funnel.reduce((sum, s) => sum + s.conversion_rate, 0) / totalStages
+    const avgConversion = totalStages > 0
+      ? funnel.reduce((sum, s) => sum + s.conversion_rate, 0) / totalStages
+      : 0
 
     return { totalStages, redZones, avgConversion }
   }, [funnel])
@@ -93,10 +115,35 @@ export const InteractiveFunnelChart = memo(function InteractiveFunnelChart({
     return 'var(--primary)' // Синий по умолчанию
   }
 
-  const handleBarClick = (data: any) => {
-    if (onStageClick) {
+  type BarClickData = FunnelStage | { payload?: FunnelStage } | null | undefined
+
+  const handleBarClick = useCallback((data: BarClickData) => {
+    if (!onStageClick) return
+    if (isFunnelStage(data)) {
       onStageClick(data)
+      return
     }
+    if (data && typeof data === 'object' && 'payload' in data && isFunnelStage(data.payload)) {
+      onStageClick(data.payload)
+    }
+  }, [onStageClick])
+
+  const handleBarEnter = useCallback((_data: unknown, index: number) => {
+    setHoveredIndex(index)
+  }, [])
+
+  const handleBarLeave = useCallback(() => {
+    setHoveredIndex(null)
+  }, [])
+
+  if (!funnel || funnel.length === 0) {
+    return (
+      <EmptyState
+        icon={<BarChart2 className="w-6 h-6" />}
+        title="Нет данных воронки"
+        description="Данные появятся после первых отчётов."
+      />
+    )
   }
 
   return (
@@ -207,14 +254,14 @@ export const InteractiveFunnelChart = memo(function InteractiveFunnelChart({
             <Bar
               dataKey="count"
               radius={[8, 8, 0, 0]}
-              onMouseEnter={(_, index) => setHoveredIndex(index)}
-              onMouseLeave={() => setHoveredIndex(null)}
-              onClick={(data) => handleBarClick(data)}
+              onMouseEnter={handleBarEnter}
+              onMouseLeave={handleBarLeave}
+              onClick={handleBarClick}
               className="cursor-pointer"
             >
               {funnel.map((stage, index) => (
                 <Cell
-                  key={`cell-${index}`}
+                  key={`cell-${stage.stage}`}
                   fill={getBarColor(stage, hoveredIndex === index)}
                   style={{
                     filter: hoveredIndex === index ? 'brightness(1.1)' : 'none',

@@ -1,4 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api'
+import { logError } from '../../lib/logger'
 
 export async function startHandler(bot: TelegramBot, msg: TelegramBot.Message) {
   const chatId = msg.chat.id
@@ -21,5 +22,10 @@ export async function startHandler(bot: TelegramBot, msg: TelegramBot.Message) {
 _Готовы к новым рекордам?_ 💪
   `.trim()
 
-  await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' })
+  try {
+    await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' })
+  } catch (error) {
+    logError('Start handler error', error)
+    await bot.sendMessage(chatId, '❌ Не удалось отправить сообщение. Попробуйте позже.')
+  }
 }

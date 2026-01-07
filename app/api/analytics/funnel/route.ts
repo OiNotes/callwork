@@ -5,7 +5,12 @@ import { calculateFullFunnel } from '@/lib/calculations/funnel'
 import { FUNNEL_STAGES } from '@/lib/config/conversionBenchmarks'
 import { calculateManagerStats, ManagerStats } from '@/lib/analytics/funnel'
 import { getSettingsForUser } from '@/lib/settings/context'
+import { GoalService } from '@/lib/services/GoalService'
+import { roundMoney, toDecimal, toNumber } from '@/lib/utils/decimal'
+import { z } from 'zod'
 import type { SettingsShape } from '@/lib/settings/getSettings'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 interface FunnelStageForChart {
   stage: string
@@ -53,9 +58,23 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth()
     const { searchParams } = new URL(request.url)
 
-    const startDateParam = searchParams.get('startDate')
-    const endDateParam = searchParams.get('endDate')
-    const userIdParam = searchParams.get('userId')
+    const querySchema = z.object({
+      startDate: z.string().datetime().optional(),
+      endDate: z.string().datetime().optional(),
+      userId: z.string().cuid().optional(),
+    })
+    const parsedQuery = querySchema.safeParse({
+      startDate: searchParams.get('startDate') ?? undefined,
+      endDate: searchParams.get('endDate') ?? undefined,
+      userId: searchParams.get('userId') ?? undefined,
+    })
+    if (!parsedQuery.success) {
+      return NextResponse.json({ error: parsedQuery.error.issues }, { status: 400 })
+    }
+    const { startDate: startDateParam, endDate: endDateParam, userId: userIdParam } = parsedQuery.data
+    if (startDateParam && endDateParam && new Date(startDateParam) > new Date(endDateParam)) {
+      return NextResponse.json({ error: 'Invalid period range' }, { status: 400 })
+    }
 
     const now = new Date()
     const startDate = startDateParam
@@ -63,9 +82,37 @@ export async function GET(request: NextRequest) {
       : new Date(now.getFullYear(), now.getMonth(), 1)
     const endDate = endDateParam ? new Date(endDateParam) : new Date(now.getFullYear(), now.getMonth() + 1, 0)
 
+    const isAdmin = user.role === 'ADMIN'
+    const isManager = user.role === 'MANAGER'
+
+    const teamUserIds =
+      isManager
+        ? await prisma.user
+            .findMany({
+              where: {
+                OR: [{ id: user.id }, { managerId: user.id }],
+                isActive: true,
+              },
+              select: { id: true },
+            })
+            .then((rows) => rows.map((row) => row.id))
+        : null
+
     let targetUserId: string | undefined
     if (userIdParam) {
-      if (user.role === 'MANAGER') {
+      if (isAdmin) {
+        const targetUser = await prisma.user.findFirst({
+          where: { id: userIdParam, isActive: true },
+          select: { id: true },
+        })
+        if (!targetUser) {
+          return NextResponse.json({ error: 'Forbidden: Cannot access other users data' }, { status: 403 })
+        }
+        targetUserId = userIdParam
+      } else if (isManager) {
+        if (!teamUserIds?.includes(userIdParam)) {
+          return NextResponse.json({ error: 'Forbidden: Cannot access other users data' }, { status: 403 })
+        }
         targetUserId = userIdParam
       } else if (userIdParam !== user.id) {
         return NextResponse.json({ error: 'Forbidden: Cannot access other users data' }, { status: 403 })
@@ -76,7 +123,13 @@ export async function GET(request: NextRequest) {
 
     const whereClause = {
       date: { gte: startDate, lte: endDate },
-      ...(targetUserId && { userId: targetUserId }),
+      ...(targetUserId
+        ? { userId: targetUserId }
+        : isManager && teamUserIds
+          ? { userId: { in: teamUserIds } }
+          : isAdmin
+            ? {}
+            : { userId: user.id }),
     }
 
     const { settings } = await getSettingsForUser(user.id, user.role)
@@ -121,7 +174,7 @@ export async function GET(request: NextRequest) {
       contractReview: aggregate._sum.contractReviewCount || 0,
       push: (aggregate._sum.pushCount as number | null) ?? aggregate._sum.contractReviewCount ?? 0,
       deals: aggregate._sum.successfulDeals || 0,
-      sales: Number(aggregate._sum.monthlySalesAmount || 0),
+      sales: toNumber(roundMoney(toDecimal(aggregate._sum.monthlySalesAmount || 0))),
       refusals: aggregate._sum.refusalsCount || 0,
       warming: aggregate._sum.warmingUpCount || 0,
       refusalByStage: refusalByStageTotals,
@@ -143,6 +196,7 @@ export async function GET(request: NextRequest) {
       where: {
         role: 'EMPLOYEE',
         isActive: true,
+        ...(isManager ? { managerId: user.id } : isAdmin ? {} : { id: user.id }),
         ...(targetUserId && { id: targetUserId }),
       },
       include: {
@@ -151,12 +205,14 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+    const employeeGoals = await GoalService.getUsersGoals(employees.map((emp) => emp.id))
 
     const managerStats: Array<ManagerStats & { id: string; name: string }> = await Promise.all(
       employees.map(async (emp): Promise<ManagerStats & { id: string; name: string }> => ({
         ...(await calculateManagerStats(emp.reports, emp.id, {
           salesPerDeal: settings.salesPerDeal,
           planMode: 'user',
+          planSalesOverride: employeeGoals[emp.id] ?? 0,
         })),
         id: emp.id,
         name: emp.name,
@@ -198,9 +254,9 @@ export async function GET(request: NextRequest) {
       settings,
     }
 
-    return NextResponse.json(response)
+    return jsonWithPrivateCache(response)
   } catch (error) {
-    console.error('Funnel API error:', error)
+    logError('Funnel API error', error)
 
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

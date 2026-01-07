@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { calculateMonthlyForecast, generateForecastChartData } from '@/lib/calculations/forecast'
 import { GoalService } from '@/lib/services/GoalService'
+import { roundMoney, toDecimal, toNumber } from '@/lib/utils/decimal'
 
 export class SalesForecastService {
   /**
@@ -18,8 +19,7 @@ export class SalesForecastService {
       },
       select: {
         id: true,
-        name: true,
-        monthlyGoal: true
+        name: true
       }
     })
 
@@ -46,33 +46,40 @@ export class SalesForecastService {
     })
 
     // 3. Aggregate data
-    let currentTotalSales = 0
-    const dailySalesMap = new Map<number, number>()
+    let currentTotalSales = toDecimal(0)
+    const dailySalesMap = new Map<number, ReturnType<typeof toDecimal>>()
 
     // Get team goal through unified service
     const totalGoal = await GoalService.getTeamGoal(managerId)
 
     // Sum sales and group by day
     reports.forEach(report => {
-      const amount = Number(report.monthlySalesAmount)
-      currentTotalSales += amount
+      const amount = toDecimal(report.monthlySalesAmount)
+      currentTotalSales = currentTotalSales.plus(amount)
       
       const day = report.date.getDate()
-      const currentDaySum = dailySalesMap.get(day) || 0
-      dailySalesMap.set(day, currentDaySum + amount)
+      const currentDaySum = dailySalesMap.get(day) || toDecimal(0)
+      dailySalesMap.set(day, currentDaySum.plus(amount))
     })
 
     // Prepare daily sales array for chart
     const dailySales = Array.from(dailySalesMap.entries()).map(([day, sales]) => ({
       day,
-      sales
+      sales: toNumber(roundMoney(sales))
     })).sort((a, b) => a.day - b.day)
 
     // 4. Calculate Forecast Metrics
-    const forecastMetrics = calculateMonthlyForecast(currentTotalSales, totalGoal)
+    const forecastMetrics = calculateMonthlyForecast(
+      toNumber(roundMoney(currentTotalSales)),
+      totalGoal
+    )
     
     // 5. Generate Chart Data
-    const chartData = generateForecastChartData(currentTotalSales, totalGoal, dailySales)
+    const chartData = generateForecastChartData(
+      toNumber(roundMoney(currentTotalSales)),
+      totalGoal,
+      dailySales
+    )
 
     return {
       metrics: forecastMetrics,

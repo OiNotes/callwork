@@ -1,463 +1,471 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import type {
-  DashboardUser,
-  EmployeeData,
-  TeamStats,
-  TrendDataPoint,
-  DashboardAlert,
-  DateRange,
-  EmployeeReport,
-} from '@/components/dashboard/types'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { computeConversions, resolveNorthStarStatus } from '@/lib/calculations/metrics'
+import { analyzeRedZonesWithBenchmarks, getFunnelData, type ManagerStats, type FunnelStage } from '@/lib/analytics/funnel.client'
+import { roundMoney, toDecimal, toNumber, safeRate } from '@/lib/utils/decimal'
 import type { MotivationCalculationResult } from '@/lib/motivation/motivationCalculator'
 import type { MotivationGradeConfig } from '@/lib/config/motivationGrades'
+import type { AlertThresholdConfig, ConversionBenchmarkConfig } from '@/lib/services/RopSettingsService'
 import type { NorthStarKpi } from '@/lib/calculations/funnel'
-import type { SettingsShape } from '@/lib/settings/getSettings'
 import type { DealCard } from '@/components/deals/DealsList'
-import type { PeriodPreset } from '@/components/filters/PeriodSelector'
-import { type ManagerStats, type FunnelStage, getFunnelData, analyzeRedZonesWithBenchmarks } from '@/lib/analytics/funnel.client'
-import { calculateFullFunnel } from '@/lib/calculations/funnel'
-import { buildManagerSparklines } from '@/lib/utils/chartData'
+import type { DashboardAlert, TrendDataPoint, TeamStats } from '@/components/dashboard/types'
 
-interface UseDashboardDataProps {
-  user: DashboardUser
+export interface DashboardFilters {
+  managerId?: string
+  startDate: string
+  endDate: string
+  page?: number
+  limit?: number
 }
 
-interface UseDashboardDataReturn {
-  // Loading states
-  isInitialLoading: boolean
-  motivationLoading: boolean
-  dealsLoading: boolean
+interface DashboardEmployeeMetricsResponse {
+  zoomBooked: number
+  pzmConducted: number
+  vzmConducted: number
+  contractReviewCount: number
+  pushCount: number
+  successfulDeals: number
+  monthlySalesAmount: string
+  reportsCount: number
+}
 
-  // Data
-  managerStats: ManagerStats[]
-  teamFunnel: FunnelStage[]
+interface DashboardEmployeeResponse {
+  id: string
+  name: string
+  role: string
+  isActive: boolean
+  monthlyGoal: string | null
+  metrics: DashboardEmployeeMetricsResponse
+  funnel: Array<{
+    id: string
+    stage: string
+    value: number
+    conversion: number
+  }>
+}
+
+interface DashboardTeamTotalsResponse {
+  zoomBooked: number
+  pzmConducted: number
+  vzmConducted: number
+  contractReviewCount: number
+  pushCount: number
+  successfulDeals: number
+  monthlySalesAmount: string
+  totalGoal: string
+  goalProgress: number
+}
+
+interface DashboardFunnelStageResponse {
+  id: string
+  stage: string
+  value: number
+  conversion: number
+  benchmark: number
+}
+
+interface DashboardAlertResponse {
+  id: string
+  type: string
+  severity: string
+  title: string
+  userId: string | null
+  userName: string | null
+  isRead: boolean
+  createdAt: string
+}
+
+interface DashboardDealResponse {
+  id: string
+  title: string
+  budget: string
+  status: string
+  paymentStatus: string
+  isFocus: boolean
+  managerId: string
+  managerName: string | null
+}
+
+interface DashboardPaginationResponse {
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
+interface DashboardSettingsResponse {
+  conversionBenchmarks: ConversionBenchmarkConfig
+  alertThresholds: AlertThresholdConfig
+  activityTarget: number
+  northStarTarget: number
+  salesPerDeal: number
+}
+
+interface DashboardTrendResponse {
+  date: string
+  sales: number
+  deals: number
+  pzm: number
+  vzm: number
+}
+
+interface DashboardResponse {
+  employees: DashboardEmployeeResponse[]
+  teamTotals: DashboardTeamTotalsResponse
+  funnel: DashboardFunnelStageResponse[]
+  alerts: DashboardAlertResponse[]
+  deals: DashboardDealResponse[]
+  pagination: DashboardPaginationResponse
+  trend: DashboardTrendResponse[]
+  motivation: MotivationCalculationResult
+  motivationGrades: MotivationGradeConfig[]
+  settings: DashboardSettingsResponse
+}
+
+export interface DashboardEmployee {
+  id: string
+  name: string
+  role: string
+  isActive: boolean
+  monthlyGoal: number | null
+  metrics: {
+    zoomBooked: number
+    pzmConducted: number
+    vzmConducted: number
+    contractReviewCount: number
+    pushCount: number
+    successfulDeals: number
+    monthlySalesAmount: number
+    reportsCount: number
+  }
+  conversions: {
+    bookedToZoom1: number
+    zoom1ToZoom2: number
+    zoom2ToContract: number
+    contractToPush: number
+    pushToDeal: number
+    northStar: number
+    totalConversion: number
+  }
+  planSales: number
+  planDeals: number
+  activityScore: number
+  trend: 'up' | 'flat' | 'down'
+}
+
+export interface DashboardData {
+  employees: DashboardEmployee[]
+  teamTotals: {
+    zoomBooked: number
+    pzmConducted: number
+    vzmConducted: number
+    contractReviewCount: number
+    pushCount: number
+    successfulDeals: number
+    monthlySalesAmount: number
+    totalGoal: number
+    goalProgress: number
+  }
+  funnel: Array<DashboardFunnelStageResponse & { dropoff: number }>
+  alerts: DashboardAlertResponse[]
+  unreadAlerts: DashboardAlertResponse[]
+  deals: DealCard[]
+  northStar: number
+  pagination: DashboardPaginationResponse
   trendData: TrendDataPoint[]
-  alerts: DashboardAlert[]
-  teamStats: TeamStats | null
+  weeklyActivityData: Array<{ day: string; pzm: number; vzm: number; deals: number }>
+  redZoneAlerts: DashboardAlert[]
+  teamStats: TeamStats
+  teamFunnel: FunnelStage[]
   northStarKpi: NorthStarKpi | null
-  rawEmployees: EmployeeData[]
   motivationData: MotivationCalculationResult | null
   motivationGrades: MotivationGradeConfig[]
-  deals: DealCard[]
-  settings: SettingsShape | null
-  managerSparklines: Map<string, number[]>
-
-  // Errors
-  motivationError: string | null
-  dealsError: string | null
-
-  // Filters
-  selectedManagerId: string
-  datePreset: PeriodPreset
-  dateRange: DateRange
-
-  // Actions
-  setSelectedManagerId: (id: string) => void
-  handleDatePresetChange: (preset: PeriodPreset, range?: DateRange) => void
-  handleToggleFocus: (dealId: string, nextValue: boolean) => Promise<void>
-  refreshMotivation: () => void
+  settings: DashboardSettingsResponse | null
 }
 
-const safeDiv = (a: number, b: number): number => (b > 0 ? Math.round((a / b) * 100) : 0)
+const parseMoney = (value: string | number | null | undefined) =>
+  toNumber(roundMoney(toDecimal(value ?? 0)))
 
-export function useDashboardData({ user }: UseDashboardDataProps): UseDashboardDataReturn {
-  // Loading states
-  const [isInitialLoading, setIsInitialLoading] = useState(true)
-  const [motivationLoading, setMotivationLoading] = useState(false)
-  const [dealsLoading, setDealsLoading] = useState(false)
-
-  // Data states
-  const [managerStats, setManagerStats] = useState<ManagerStats[]>([])
-  const [teamFunnel, setTeamFunnel] = useState<FunnelStage[]>([])
-  const [trendData, setTrendData] = useState<TrendDataPoint[]>([])
-  const [alerts, setAlerts] = useState<DashboardAlert[]>([])
-  const [teamStats, setTeamStats] = useState<TeamStats | null>(null)
-  const [northStarKpi, setNorthStarKpi] = useState<NorthStarKpi | null>(null)
-  const [rawEmployees, setRawEmployees] = useState<EmployeeData[]>([])
-  const [serverTeamStats, setServerTeamStats] = useState<TeamStats | null>(null)
-  const [motivationData, setMotivationData] = useState<MotivationCalculationResult | null>(null)
-  const [motivationGrades, setMotivationGrades] = useState<MotivationGradeConfig[]>([])
-  const [deals, setDeals] = useState<DealCard[]>([])
-  const [settings, setSettings] = useState<SettingsShape | null>(null)
-
-  // Error states
-  const [motivationError, setMotivationError] = useState<string | null>(null)
-  const [dealsError, setDealsError] = useState<string | null>(null)
-
-  // Filter states
-  const [selectedManagerId, setSelectedManagerId] = useState<string>('all')
-  const [datePreset, setDatePreset] = useState<PeriodPreset>('thisMonth')
-  const [dateRange, setDateRange] = useState<DateRange>(() => {
-    const now = new Date()
-    return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }
+async function fetchDashboard(filters: DashboardFilters): Promise<DashboardResponse> {
+  const params = new URLSearchParams({
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    page: String(filters.page ?? 1),
+    limit: String(filters.limit ?? 50),
+    ...(filters.managerId ? { managerId: filters.managerId } : {}),
   })
 
-  // Refresh key for motivation data
-  const [motivationRefreshKey, setMotivationRefreshKey] = useState(0)
+  const res = await fetch(`/api/dashboard?${params}`, {
+    credentials: 'include',
+  })
 
-  const handleDatePresetChange = useCallback((preset: PeriodPreset, nextRange?: DateRange) => {
-    setDatePreset(preset)
-    if (nextRange) {
-      setDateRange(nextRange)
-    }
-  }, [])
+  if (!res.ok) {
+    throw new Error(`Dashboard fetch failed: ${res.status}`)
+  }
 
-  const refreshMotivation = useCallback(() => {
-    setMotivationRefreshKey((key) => key + 1)
-  }, [])
+  return res.json()
+}
 
-  // Recompute views based on filter changes
-  const recomputeViews = useCallback((
-    employeesList: EmployeeData[],
-    managerFilter = selectedManagerId,
-    serverStats: TeamStats | null = null,
-    currentSettings: SettingsShape | null = null
-  ) => {
-    const filteredEmployees =
-      managerFilter === 'all'
-        ? employeesList
-        : employeesList.filter((emp) => emp.id === managerFilter)
+const buildTeamStats = (
+  totals: DashboardTeamTotalsResponse,
+  settings: DashboardSettingsResponse | null
+): { teamStats: TeamStats; teamFunnel: FunnelStage[]; northStarKpi: NorthStarKpi | null } => {
+  const planSales = parseMoney(totals.totalGoal)
+  const salesAmount = parseMoney(totals.monthlySalesAmount)
+  const salesPerDeal = settings?.salesPerDeal ?? 100_000
 
-    const effectiveEmployees = filteredEmployees.length > 0 ? filteredEmployees : employeesList
+  const conversions = computeConversions(
+    {
+      zoomBooked: totals.zoomBooked,
+      zoom1Held: totals.pzmConducted,
+      zoom2Held: totals.vzmConducted,
+      contractReview: totals.contractReviewCount,
+      push: totals.pushCount,
+      deals: totals.successfulDeals,
+    },
+    { benchmarks: settings?.conversionBenchmarks }
+  )
 
-    const processedStats: ManagerStats[] = effectiveEmployees.map((emp) => ({
-      id: emp.id,
-      name: emp.name,
-      zoomBooked: emp.zoomBooked || 0,
-      zoom1Held: emp.zoom1Held || 0,
-      zoom2Held: emp.zoom2Held || 0,
-      contractReview: emp.contractReview || 0,
-      pushCount: emp.pushCount || 0,
-      successfulDeals: emp.successfulDeals || 0,
-      salesAmount: emp.salesAmount || 0,
-      refusals: emp.refusals || 0,
-      warming: emp.warming || 0,
-      bookedToZoom1: emp.bookedToZoom1 || 0,
-      zoom1ToZoom2: emp.zoom1ToZoom2 || 0,
-      zoom2ToContract: emp.zoom2ToContract || 0,
-      contractToPush: emp.contractToPush || 0,
-      pushToDeal: emp.pushToDeal || 0,
-      northStar: emp.northStar || 0,
-      totalConversion: emp.totalConversion || 0,
-      planSales: emp.planSales || 0,
-      planDeals: emp.planDeals || 0,
-      activityScore: emp.activityScore || 0,
-      trend: emp.trend || 'flat',
-    }))
+  const convMap = Object.fromEntries(conversions.stages.map((stage) => [stage.id, stage.conversion]))
 
-    setManagerStats(processedStats)
+  const planDeals = planSales > 0 ? Math.round(planSales / salesPerDeal) : 0
+  const progress = planSales > 0 ? (salesAmount / planSales) * 100 : 0
+  const trend: 'up' | 'flat' | 'down' = progress >= 80 ? 'up' : progress >= 50 ? 'flat' : 'down'
 
-    let tStats: TeamStats
-    let teamReports: EmployeeReport[] = []
+  const expectedActivity = totals.zoomBooked > 0 ? 100 : 0
+  const actualActivity = Math.min(100, Math.round((totals.pzmConducted / Math.max(1, totals.zoomBooked)) * 100))
+  const activityScore = Math.round((expectedActivity + actualActivity) / 2)
 
-    if (managerFilter === 'all' && serverStats) {
-      tStats = { ...serverStats }
-      teamReports = effectiveEmployees.flatMap((e) => e.reports || [])
-    } else {
-      teamReports = effectiveEmployees.flatMap((e) => e.reports || [])
+  const teamStats: TeamStats = {
+    zoomBooked: totals.zoomBooked,
+    zoom1Held: totals.pzmConducted,
+    zoom2Held: totals.vzmConducted,
+    contractReview: totals.contractReviewCount,
+    pushCount: totals.pushCount,
+    successfulDeals: totals.successfulDeals,
+    salesAmount,
+    planSales,
+    planDeals,
+    refusals: 0,
+    warming: 0,
+    bookedToZoom1: (convMap.zoom1Held as number) || 0,
+    zoom1ToZoom2: (convMap.zoom2Held as number) || 0,
+    zoom2ToContract: (convMap.contractReview as number) || 0,
+    contractToPush: (convMap.push as number) || 0,
+    pushToDeal: (convMap.deal as number) || 0,
+    northStar: conversions.northStar,
+    totalConversion: conversions.totalConversion,
+    activityScore,
+    trend,
+  }
 
-      const tStatsRaw = {
-        zoomBooked: effectiveEmployees.reduce((sum, e) => sum + (e.zoomBooked || 0), 0),
-        zoom1Held: effectiveEmployees.reduce((sum, e) => sum + (e.zoom1Held || 0), 0),
-        zoom2Held: effectiveEmployees.reduce((sum, e) => sum + (e.zoom2Held || 0), 0),
-        contractReview: effectiveEmployees.reduce((sum, e) => sum + (e.contractReview || 0), 0),
-        pushCount: effectiveEmployees.reduce((sum, e) => sum + (e.pushCount || 0), 0),
-        successfulDeals: effectiveEmployees.reduce((sum, e) => sum + (e.successfulDeals || 0), 0),
-        salesAmount: effectiveEmployees.reduce((sum, e) => sum + (e.salesAmount || 0), 0),
-        planSales: effectiveEmployees.reduce((sum, e) => sum + (e.planSales || 0), 0),
-        planDeals: effectiveEmployees.reduce((sum, e) => sum + (e.planDeals || 0), 0),
-        refusals: effectiveEmployees.reduce((sum, e) => sum + (e.refusals || 0), 0),
-        warming: effectiveEmployees.reduce((sum, e) => sum + (e.warming || 0), 0),
-      }
+  const teamFunnel = getFunnelData(teamStats, settings?.conversionBenchmarks) as FunnelStage[]
+  const northStarKpi: NorthStarKpi = {
+    value: conversions.northStar,
+    ...resolveNorthStarStatus(conversions.northStar, settings?.northStarTarget),
+  }
 
-      const expectedActivity = tStatsRaw.zoomBooked > 0 ? 100 : 0
-      const actualActivity = Math.min(100, Math.round((tStatsRaw.zoom1Held / Math.max(1, tStatsRaw.zoomBooked)) * 100))
+  return { teamStats, teamFunnel, northStarKpi }
+}
+
+export function useDashboardData(filters: DashboardFilters, options?: { enabled?: boolean }) {
+  const query = useQuery({
+    queryKey: ['dashboard', filters],
+    queryFn: () => fetchDashboard(filters),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
+    enabled: options?.enabled ?? true,
+  })
+
+  const derivedData = useMemo<DashboardData | null>(() => {
+    if (!query.data) return null
+
+    const settings = query.data.settings ?? null
+
+    const employees: DashboardEmployee[] = query.data.employees.map((employee) => {
+      const monthlySalesAmount = parseMoney(employee.metrics.monthlySalesAmount)
+      const planSales = parseMoney(employee.monthlyGoal)
+      const salesPerDeal = settings?.salesPerDeal ?? 100_000
+      const planDeals = planSales > 0 ? Math.round(planSales / salesPerDeal) : 0
+      const progress = planSales > 0 ? (monthlySalesAmount / planSales) * 100 : 0
+      const trend: 'up' | 'flat' | 'down' = progress >= 80 ? 'up' : progress >= 50 ? 'flat' : 'down'
+      const expectedActivity = employee.metrics.zoomBooked > 0 ? 100 : 0
+      const actualActivity = Math.min(
+        100,
+        Math.round((employee.metrics.pzmConducted / Math.max(1, employee.metrics.zoomBooked)) * 100)
+      )
       const activityScore = Math.round((expectedActivity + actualActivity) / 2)
 
-      const progress = tStatsRaw.planSales > 0 ? (tStatsRaw.salesAmount / tStatsRaw.planSales) * 100 : 0
-      const trend: 'up' | 'flat' | 'down' = progress >= 80 ? 'up' : progress >= 50 ? 'flat' : 'down'
+      const conversions = computeConversions(
+        {
+          zoomBooked: employee.metrics.zoomBooked,
+          zoom1Held: employee.metrics.pzmConducted,
+          zoom2Held: employee.metrics.vzmConducted,
+          contractReview: employee.metrics.contractReviewCount,
+          push: employee.metrics.pushCount,
+          deals: employee.metrics.successfulDeals,
+        },
+        { benchmarks: settings?.conversionBenchmarks }
+      )
 
-      tStats = {
-        ...tStatsRaw,
-        bookedToZoom1: safeDiv(tStatsRaw.zoom1Held, tStatsRaw.zoomBooked),
-        zoom1ToZoom2: safeDiv(tStatsRaw.zoom2Held, tStatsRaw.zoom1Held),
-        zoom2ToContract: safeDiv(tStatsRaw.contractReview, tStatsRaw.zoom2Held),
-        contractToPush: safeDiv(tStatsRaw.pushCount, tStatsRaw.contractReview),
-        pushToDeal: safeDiv(tStatsRaw.successfulDeals, tStatsRaw.pushCount),
-        northStar: safeDiv(tStatsRaw.successfulDeals, tStatsRaw.zoom1Held),
-        totalConversion: safeDiv(tStatsRaw.successfulDeals, tStatsRaw.zoomBooked),
+      const convMap = Object.fromEntries(conversions.stages.map((stage) => [stage.id, stage.conversion]))
+
+      return {
+        id: employee.id,
+        name: employee.name,
+        role: employee.role,
+        isActive: employee.isActive,
+        monthlyGoal: employee.monthlyGoal ? parseMoney(employee.monthlyGoal) : null,
+        metrics: {
+          zoomBooked: employee.metrics.zoomBooked,
+          pzmConducted: employee.metrics.pzmConducted,
+          vzmConducted: employee.metrics.vzmConducted,
+          contractReviewCount: employee.metrics.contractReviewCount,
+          pushCount: employee.metrics.pushCount,
+          successfulDeals: employee.metrics.successfulDeals,
+          monthlySalesAmount,
+          reportsCount: employee.metrics.reportsCount,
+        },
+        conversions: {
+          bookedToZoom1: (convMap.zoom1Held as number) || 0,
+          zoom1ToZoom2: (convMap.zoom2Held as number) || 0,
+          zoom2ToContract: (convMap.contractReview as number) || 0,
+          contractToPush: (convMap.push as number) || 0,
+          pushToDeal: (convMap.deal as number) || 0,
+          northStar: conversions.northStar,
+          totalConversion: conversions.totalConversion,
+        },
+        planSales,
+        planDeals,
         activityScore,
         trend,
       }
-    }
-
-    setTeamStats(tStats)
-    setTeamFunnel(getFunnelData(tStats, currentSettings?.conversionBenchmarks) as FunnelStage[])
-
-    const { northStarKpi: teamNorthStar } = calculateFullFunnel(
-      {
-        zoomBooked: tStats.zoomBooked,
-        zoom1Held: tStats.zoom1Held,
-        zoom2Held: tStats.zoom2Held,
-        contractReview: tStats.contractReview,
-        push: tStats.pushCount,
-        deals: tStats.successfulDeals,
-        sales: tStats.salesAmount,
-        refusals: tStats.refusals,
-        warming: tStats.warming,
-      },
-      {
-        benchmarks: currentSettings?.conversionBenchmarks,
-        northStarTarget: currentSettings?.northStarTarget,
-      }
-    )
-    setNorthStarKpi(teamNorthStar)
-
-    // Build trend data
-    const dailyMap = new Map<string, TrendDataPoint>()
-    teamReports.forEach((r) => {
-      const d = new Date(r.date).toISOString().split('T')[0]
-      if (!dailyMap.has(d)) {
-        dailyMap.set(d, { date: d, sales: 0, deals: 0 })
-      }
-      const entry = dailyMap.get(d)!
-      entry.sales += Number(r.monthlySalesAmount)
-      entry.deals += r.successfulDeals
     })
 
-    const finalTrend = Array.from(dailyMap.values())
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map((d) => ({
-        ...d,
-        date: new Date(d.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
-      }))
-    setTrendData(finalTrend)
+    const totals = query.data.teamTotals
+    const { teamStats, teamFunnel, northStarKpi } = buildTeamStats(totals, settings)
 
-    // Build alerts
-    const newAlerts: DashboardAlert[] = []
-    processedStats.forEach((stat) => {
+    const funnelWithConversions = query.data.funnel.map((stage, i) => ({
+      ...stage,
+      dropoff:
+        i < query.data.funnel.length - 1
+          ? Math.round((1 - query.data.funnel[i + 1].value / Math.max(stage.value, 1)) * 100)
+          : 0,
+    }))
+
+    const northStar = query.data.funnel.length >= 6
+      ? safeRate(query.data.funnel[5].value, Math.max(query.data.funnel[1]?.value ?? 0, 1))
+      : 0
+
+    const unreadAlerts = query.data.alerts.filter((alert) => !alert.isRead)
+
+    const deals: DealCard[] = query.data.deals.map((deal) => ({
+      id: deal.id,
+      title: deal.title,
+      budget: parseMoney(deal.budget),
+      status: deal.status as DealCard['status'],
+      paymentStatus: deal.paymentStatus as DealCard['paymentStatus'],
+      isFocus: deal.isFocus,
+      updatedAt: undefined,
+    }))
+
+    const trendData: TrendDataPoint[] = query.data.trend.map((point) => ({
+      date: new Date(point.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }),
+      sales: parseMoney(point.sales),
+      deals: point.deals,
+    }))
+
+    const weeklyActivityData = query.data.trend.slice(-7).map((point) => ({
+      day: new Date(point.date).toLocaleDateString('ru-RU', { weekday: 'short' }),
+      pzm: point.pzm,
+      vzm: point.vzm,
+      deals: point.deals,
+    }))
+
+    const redZoneAlerts: DashboardAlert[] = employees.flatMap((employee) => {
+      const stats: ManagerStats = {
+        id: employee.id,
+        name: employee.name,
+        zoomBooked: employee.metrics.zoomBooked,
+        zoom1Held: employee.metrics.pzmConducted,
+        zoom2Held: employee.metrics.vzmConducted,
+        contractReview: employee.metrics.contractReviewCount,
+        pushCount: employee.metrics.pushCount,
+        successfulDeals: employee.metrics.successfulDeals,
+        salesAmount: employee.metrics.monthlySalesAmount,
+        refusals: 0,
+        warming: 0,
+        bookedToZoom1: employee.conversions.bookedToZoom1,
+        zoom1ToZoom2: employee.conversions.zoom1ToZoom2,
+        zoom2ToContract: employee.conversions.zoom2ToContract,
+        contractToPush: employee.conversions.contractToPush,
+        pushToDeal: employee.conversions.pushToDeal,
+        northStar: employee.conversions.northStar,
+        totalConversion: employee.conversions.totalConversion,
+        planSales: employee.planSales,
+        planDeals: employee.planDeals,
+        activityScore: employee.activityScore,
+        trend: employee.trend,
+      }
+
       const issues = analyzeRedZonesWithBenchmarks(
-        stat,
-        currentSettings?.conversionBenchmarks,
-        currentSettings?.alertThresholds,
-        currentSettings?.activityTarget,
-        currentSettings?.northStarTarget
+        stats,
+        settings?.conversionBenchmarks,
+        settings?.alertThresholds,
+        settings?.activityTarget,
+        settings?.northStarTarget
       )
-      issues.forEach((issue) => {
-        newAlerts.push({
-          id: `${stat.id}-${issue.stage}`,
-          type: issue.severity as 'critical' | 'warning' | 'info',
-          title: `Проблема на этапе ${issue.stage}`,
-          description: `${issue.metric} у сотрудника ${stat.name} составляет ${issue.value}% (Норма: ${issue.benchmark}%)`,
-          managerName: stat.name,
-        })
-      })
+
+      return issues.map((issue) => ({
+        id: `${employee.id}-${issue.stage}`,
+        type: issue.severity as 'critical' | 'warning' | 'info',
+        title: `Проблема на этапе ${issue.stage}`,
+        description: `${issue.metric} у сотрудника ${employee.name} составляет ${issue.value}% (Норма: ${issue.benchmark}%)`,
+        managerName: employee.name,
+      }))
     })
 
-    if (tStats.successfulDeals === 0) {
-      newAlerts.push({
-        id: 'no-deals-team',
-        type: 'critical',
-        title: 'Отсутствие продаж',
-        description: 'За выбранный период в команде не закрыто ни одной сделки.',
-      })
+    return {
+      employees,
+      teamTotals: {
+        zoomBooked: totals.zoomBooked,
+        pzmConducted: totals.pzmConducted,
+        vzmConducted: totals.vzmConducted,
+        contractReviewCount: totals.contractReviewCount,
+        pushCount: totals.pushCount,
+        successfulDeals: totals.successfulDeals,
+        monthlySalesAmount: parseMoney(totals.monthlySalesAmount),
+        totalGoal: parseMoney(totals.totalGoal),
+        goalProgress: totals.goalProgress,
+      },
+      funnel: funnelWithConversions,
+      alerts: query.data.alerts,
+      unreadAlerts,
+      deals,
+      northStar,
+      pagination: query.data.pagination,
+      trendData,
+      weeklyActivityData,
+      redZoneAlerts,
+      teamStats,
+      teamFunnel,
+      northStarKpi,
+      motivationData: query.data.motivation ?? null,
+      motivationGrades: query.data.motivationGrades ?? [],
+      settings,
     }
-
-    setAlerts(newAlerts)
-  }, [selectedManagerId])
-
-  // Fetch employees data
-  useEffect(() => {
-    async function fetchData() {
-      if (user.role !== 'MANAGER') return
-
-      try {
-        const response = await fetch(
-          `/api/employees?startDate=${dateRange.start.toISOString()}&endDate=${dateRange.end.toISOString()}`
-        )
-        const data = await response.json()
-        const employeesList: EmployeeData[] = data.employees || []
-        const tStats: TeamStats | null = data.teamStats || null
-        setSettings(data.settings || null)
-
-        setRawEmployees(employeesList)
-        setServerTeamStats(tStats)
-        recomputeViews(employeesList, selectedManagerId, tStats, data.settings || null)
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setIsInitialLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [user.role, dateRange.start, dateRange.end, selectedManagerId, recomputeViews])
-
-  // Recompute on filter change
-  useEffect(() => {
-    if (rawEmployees.length === 0) return
-    recomputeViews(rawEmployees, selectedManagerId, serverTeamStats, settings)
-  }, [selectedManagerId, rawEmployees, serverTeamStats, recomputeViews, settings])
-
-  // Fetch motivation data
-  useEffect(() => {
-    if (user.role !== 'MANAGER') return
-
-    async function fetchMotivation() {
-      setMotivationLoading(true)
-      setMotivationError(null)
-      try {
-        const params = new URLSearchParams({
-          managerId: selectedManagerId,
-          startDate: dateRange.start.toISOString(),
-          endDate: dateRange.end.toISOString(),
-        })
-
-        const response = await fetch(`/api/motivation/summary?${params.toString()}`)
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Не удалось загрузить мотивацию')
-        }
-
-        setMotivationData({
-          factTurnover: Number(data.factTurnover || 0),
-          hotTurnover: Number(data.hotTurnover || 0),
-          forecastTurnover: Number(data.forecastTurnover || 0),
-          totalPotentialTurnover: Number(data.totalPotentialTurnover || 0),
-          factRate: Number(data.factRate || 0),
-          forecastRate: Number(data.forecastRate || 0),
-          salaryFact: Number(data.salaryFact || 0),
-          salaryForecast: Number(data.salaryForecast || 0),
-          potentialGain: Number(data.potentialGain || 0),
-        })
-        setMotivationGrades((data.grades || []) as MotivationGradeConfig[])
-      } catch (error) {
-        console.error('Error fetching motivation summary:', error)
-        setMotivationError(error instanceof Error ? error.message : 'Ошибка загрузки данных')
-      } finally {
-        setMotivationLoading(false)
-      }
-    }
-
-    fetchMotivation()
-  }, [user.role, selectedManagerId, dateRange.start, dateRange.end, motivationRefreshKey])
-
-  // Fetch deals
-  useEffect(() => {
-    if (user.role !== 'MANAGER') return
-
-    async function fetchDeals() {
-      setDealsLoading(true)
-      setDealsError(null)
-      try {
-        const params = new URLSearchParams({
-          managerId: selectedManagerId,
-          status: 'OPEN',
-          limit: '20',
-        })
-        const response = await fetch(`/api/deals?${params.toString()}`)
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Не удалось загрузить сделки')
-        }
-
-        setDeals(
-          (data.deals || []).map(
-            (deal: { id: string; budget?: number | string; isFocus?: boolean; [key: string]: unknown }) =>
-              ({
-                ...deal,
-                budget: Number(deal.budget || 0),
-              }) as DealCard
-          )
-        )
-      } catch (error) {
-        console.error('Error fetching deals:', error)
-        setDealsError(error instanceof Error ? error.message : 'Ошибка загрузки сделок')
-      } finally {
-        setDealsLoading(false)
-      }
-    }
-
-    fetchDeals()
-  }, [user.role, selectedManagerId, motivationRefreshKey])
-
-  // Set loading false for non-managers
-  useEffect(() => {
-    if (user.role !== 'MANAGER') {
-      setIsInitialLoading(false)
-    }
-  }, [user.role])
-
-  // Handle deal focus toggle
-  const handleToggleFocus = useCallback(async (dealId: string, nextValue: boolean) => {
-    setDealsError(null)
-    setDeals((prev) =>
-      prev.map((deal) => (deal.id === dealId ? { ...deal, isFocus: nextValue } : deal))
-    )
-
-    try {
-      const response = await fetch(`/api/deals/${dealId}/focus`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isFocus: nextValue }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Не удалось обновить фокус')
-      }
-
-      setMotivationRefreshKey((key) => key + 1)
-    } catch (error) {
-      console.error('Failed to update deal focus', error)
-      setDeals((prev) =>
-        prev.map((deal) => (deal.id === dealId ? { ...deal, isFocus: !nextValue } : deal))
-      )
-      setDealsError(error instanceof Error ? error.message : 'Ошибка обновления сделки')
-    }
-  }, [])
-
-  // Build sparklines
-  const managerSparklines = useMemo(() => {
-    return buildManagerSparklines(rawEmployees, 7)
-  }, [rawEmployees])
+  }, [query.data])
 
   return {
-    // Loading states
-    isInitialLoading,
-    motivationLoading,
-    dealsLoading,
-
-    // Data
-    managerStats,
-    teamFunnel,
-    trendData,
-    alerts,
-    teamStats,
-    northStarKpi,
-    rawEmployees,
-    motivationData,
-    motivationGrades,
-    deals,
-    settings,
-    managerSparklines,
-
-    // Errors
-    motivationError,
-    dealsError,
-
-    // Filters
-    selectedManagerId,
-    datePreset,
-    dateRange,
-
-    // Actions
-    setSelectedManagerId,
-    handleDatePresetChange,
-    handleToggleFocus,
-    refreshMotivation,
+    data: derivedData,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
   }
 }

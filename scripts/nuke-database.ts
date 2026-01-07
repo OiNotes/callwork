@@ -15,6 +15,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -87,7 +88,7 @@ async function checkDatabase() {
       total: usersCount + reportsCount + dealsCount + alertsCount + gradesCount
     }
   } catch (error) {
-    console.error('❌ Ошибка подключения к базе:', error)
+    logError('Ошибка подключения к базе', error)
     throw error
   }
 }
@@ -141,7 +142,7 @@ async function nukeDatabase() {
       users: deletedUsers.count
     }
   } catch (error) {
-    console.error('\n❌ ОШИБКА ПРИ УДАЛЕНИИ:', error)
+    logError('Ошибка при удалении', error)
     throw error
   }
 }
@@ -208,7 +209,7 @@ async function main() {
 
 main()
   .catch(error => {
-    console.error('\n💥 КРИТИЧЕСКАЯ ОШИБКА:', error)
+    logError('Критическая ошибка', error)
     process.exit(1)
   })
   .finally(async () => {

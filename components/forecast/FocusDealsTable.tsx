@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useCallback } from 'react'
+import { motion } from '@/lib/motion'
 import { Zap, Search, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatMoney } from '@/lib/utils/format'
 
 interface Deal {
   id: string
@@ -23,9 +24,11 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
   const [isUpdating, setIsUpdating] = useState<string | null>(null)
 
   // Update local state when props change
-  if (JSON.stringify(deals) !== JSON.stringify(localDeals) && !isUpdating) {
+  useEffect(() => {
+    if (!isUpdating) {
       setLocalDeals(deals)
-  }
+    }
+  }, [deals, isUpdating])
 
   const handleToggleFocus = async (dealId: string, currentStatus: boolean) => {
     setIsUpdating(dealId)
@@ -56,6 +59,13 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
     }
   }
 
+  const handleToggleClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const dealId = event.currentTarget.dataset.dealId
+    const isFocus = event.currentTarget.dataset.isFocus === 'true'
+    if (!dealId) return
+    void handleToggleFocus(dealId, isFocus)
+  }, [handleToggleFocus])
+
   if (localDeals.length === 0) {
       return (
           <div className="glass-card p-8 flex flex-col items-center justify-center text-center">
@@ -84,7 +94,7 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
+        <table className="w-full text-sm text-left" aria-label="Активные сделки">
           <thead className="bg-[var(--secondary)]/50 text-[var(--muted-foreground)] font-medium">
             <tr>
               <th className="px-6 py-3">Фокус</th>
@@ -103,8 +113,12 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
               >
                 <td className="px-6 py-4 w-16">
                     <button
-                        onClick={() => handleToggleFocus(deal.id, deal.isFocus)}
+                        data-deal-id={deal.id}
+                        data-is-focus={deal.isFocus ? 'true' : 'false'}
+                        onClick={handleToggleClick}
                         disabled={isUpdating === deal.id}
+                        aria-label={`${deal.isFocus ? 'Убрать из фокуса' : 'Добавить в фокус'}: ${deal.title}`}
+                        aria-pressed={deal.isFocus}
                         className={`
                             w-10 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--primary)]
                             ${deal.isFocus ? 'bg-[var(--primary)]' : 'bg-[var(--muted)] border border-[var(--border)]'}
@@ -112,7 +126,7 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
                         `}
                     >
                         <div className={`
-                            absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 flex items-center justify-center
+                            absolute top-1 left-1 w-4 h-4 bg-[var(--card)] rounded-full shadow-sm transition-transform duration-200 flex items-center justify-center
                             ${deal.isFocus ? 'translate-x-4' : 'translate-x-0'}
                         `}>
                             {deal.isFocus && <Zap className="w-2.5 h-2.5 text-[var(--primary)]" />}
@@ -124,7 +138,7 @@ export function FocusDealsTable({ deals, onUpdate }: FocusDealsTableProps) {
                 </td>
                 <td className="px-6 py-4">
                     <div className="font-bold text-[var(--foreground)]">
-                        {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(Number(deal.budget))}
+                        {formatMoney(deal.budget)}
                     </div>
                 </td>
                 <td className="px-6 py-4 text-right text-[var(--muted-foreground)]">

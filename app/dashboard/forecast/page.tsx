@@ -8,7 +8,7 @@ export default async function ForecastRootPage() {
     redirect('/login')
   }
 
-  if (user.role === 'MANAGER') {
+  if (user.role === 'MANAGER' || user.role === 'ADMIN') {
     redirect('/dashboard/forecast/department')
   } else {
     redirect('/dashboard/forecast/income')

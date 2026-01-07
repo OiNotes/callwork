@@ -5,8 +5,19 @@
  * чтобы все экраны использовали один источник правды.
  */
 import { cloneDemoTvData } from '@/lib/demoData'
+import { roundMoney, toDecimal, toNumber } from '@/lib/utils/decimal'
 
 // --- TYPES ---
+
+export interface TVFeedItem {
+  id: string
+  user: string
+  type: 'MILESTONE' | 'SALE' | 'DEAL'
+  amount?: number
+  deals: number
+  message: string
+  time: string
+}
 
 export interface TVData {
   kpi: {
@@ -34,7 +45,7 @@ export interface TVData {
     goal: number
     progress: number
   }>
-  feed: Array<any>
+  feed: TVFeedItem[]
 }
 
 export type DemoEventType = 'NEW_DEAL' | 'NEW_CALL' | 'MILESTONE' | 'POSITION_CHANGE'
@@ -61,7 +72,11 @@ export function simulateKPIChange(currentData: TVData): TVData {
   // Изменения выручки: ±10k-50k₽
   const salesDelta = Math.floor(Math.random() * 40000) + 10000
   const salesIncrease = Math.random() > 0.3 // 70% вероятность роста
-  newData.kpi.sales += salesIncrease ? salesDelta : -salesDelta / 2
+  const salesDeltaValue = toDecimal(salesDelta)
+  const nextSales = salesIncrease
+    ? toDecimal(newData.kpi.sales).plus(salesDeltaValue)
+    : toDecimal(newData.kpi.sales).minus(salesDeltaValue.dividedBy(2))
+  newData.kpi.sales = toNumber(roundMoney(nextSales))
 
   // Изменения звонков: ±1-3
   if (Math.random() > 0.4) {
@@ -81,12 +96,17 @@ export function simulateKPIChange(currentData: TVData): TVData {
 
   // Пересчет конверсии
   if (newData.kpi.calls > 0) {
-    newData.kpi.conversionRate = (newData.kpi.deals / newData.kpi.calls) * 100
+    newData.kpi.conversionRate = toDecimal(newData.kpi.deals)
+      .dividedBy(newData.kpi.calls)
+      .times(100)
+      .toNumber()
   }
 
   // Пересчет среднего чека
   if (newData.kpi.deals > 0) {
-    newData.kpi.averageDealSize = newData.kpi.sales / newData.kpi.deals
+    newData.kpi.averageDealSize = toNumber(
+      roundMoney(toDecimal(newData.kpi.sales).dividedBy(newData.kpi.deals))
+    )
   }
 
   // Обновление трендов (для визуальных эффектов)
@@ -109,9 +129,12 @@ export function simulateLeaderboardChange(leaderboard: TVData['leaderboard']): T
 
   // Увеличиваем продажи на 50k-150k₽
   const salesIncrease = Math.floor(Math.random() * 100000) + 50000
-  employee.sales += salesIncrease
+  employee.sales = toNumber(roundMoney(toDecimal(employee.sales).plus(salesIncrease)))
   employee.deals += 1
-  employee.progress = (employee.sales / employee.goal) * 100
+  employee.progress = toDecimal(employee.sales)
+    .dividedBy(Math.max(1, employee.goal))
+    .times(100)
+    .toNumber()
 
   // Пересортировка и обновление рангов
   newLeaderboard.sort((a: typeof newLeaderboard[0], b: typeof newLeaderboard[0]) => b.sales - a.sales)

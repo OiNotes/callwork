@@ -1,10 +1,23 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { AlertTriangle, Users, TrendingDown, Flame, XCircle, Activity, ChevronDown } from 'lucide-react'
 import { getConversionColor, formatNumber, formatPercent } from '@/lib/calculations/funnel'
 import type { FunnelStage, SideFlow } from '@/lib/calculations/funnel'
-import { useMemo } from 'react'
+import { memo, useMemo, useCallback } from 'react'
+import { cn } from '@/lib/utils/cn'
+
+function getDropoff(current: number, next: number): number {
+  if (current === 0) return 0
+  return Math.round((1 - next / current) * 100)
+}
+
+function getStageColor(conversion: number, benchmark: number): string {
+  const ratio = conversion / benchmark
+  if (ratio >= 1) return 'text-emerald-500'
+  if (ratio >= 0.8) return 'text-amber-500'
+  return 'text-red-500'
+}
 
 interface FullFunnelChartProps {
   funnel: FunnelStage[]
@@ -12,8 +25,41 @@ interface FullFunnelChartProps {
   onStageClick?: (stage: FunnelStage) => void
 }
 
-export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelChartProps) {
-  const maxValue = useMemo(() => funnel[0]?.value || 1, [funnel])
+export const FullFunnelChart = memo(function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelChartProps) {
+  const maxValue = useMemo(() => Math.max(...funnel.map((stage) => stage.value), 1), [funnel])
+  const stagesWithDropoff = useMemo(
+    () =>
+      funnel.map((stage, index) => {
+        const nextStage = funnel[index + 1]
+        return {
+          ...stage,
+          dropoff: nextStage ? getDropoff(stage.value, nextStage.value) : 0,
+          widthPercent: Math.max(40, (stage.value / maxValue) * 100),
+          nextWidthPercent: nextStage ? Math.max(40, (nextStage.value / maxValue) * 100) : 40,
+        }
+      }),
+    [funnel, maxValue]
+  )
+  const stageById = useMemo(
+    () => new Map<string, FunnelStage>(funnel.map((stage) => [stage.id, stage])),
+    [funnel]
+  )
+
+  const handleStageClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onStageClick) return
+    const stageId = event.currentTarget.dataset.stageId
+    if (!stageId) return
+    const stage = stageById.get(stageId)
+    if (stage) {
+      onStageClick(stage)
+    }
+  }, [onStageClick, stageById])
+  const handleStageKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.currentTarget.click()
+    }
+  }, [])
 
   if (!funnel || funnel.length === 0) {
     return (
@@ -22,12 +68,6 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
         <p className="font-medium">Нет данных для воронки</p>
       </div>
     )
-  }
-
-  // Calculate dropoff percentages
-  const getDropoff = (currentValue: number, nextValue: number) => {
-    if (currentValue <= 0) return 0
-    return ((currentValue - nextValue) / currentValue) * 100
   }
 
   return (
@@ -39,13 +79,13 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
 
         {/* Funnel Container */}
         <div className="relative flex flex-col items-center py-4">
-          {funnel.map((stage, index) => {
-            // Calculate trapezoid width - gradually narrowing
-            const widthPercent = Math.max(100 - (index * 12), 40)
-            const nextWidthPercent = Math.max(100 - ((index + 1) * 12), 40)
+          {stagesWithDropoff.map((stage, index) => {
+            const widthPercent = stage.widthPercent
+            const nextWidthPercent = stage.nextWidthPercent
             const color = getConversionColor(stage.conversion, stage.isRedZone)
-            const isLast = index === funnel.length - 1
-            const dropoff = !isLast && funnel[index + 1] ? getDropoff(stage.value, funnel[index + 1].value) : 0
+            const isLast = index === stagesWithDropoff.length - 1
+            const dropoff = stage.dropoff ?? 0
+            const conversionClass = getStageColor(stage.conversion, stage.benchmark)
 
             return (
               <motion.div
@@ -71,9 +111,14 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
                     "bg-[var(--card)]"
                   )}
                   style={{ width: `${widthPercent}%`, minWidth: '300px' }}
-                  onClick={() => onStageClick?.(stage)}
+                  data-stage-id={stage.id}
+                  onClick={handleStageClick}
+                  onKeyDown={handleStageKeyDown}
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.99 }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${stage.stage}: ${formatNumber(stage.value)} (${formatPercent(stage.conversion)})`}
                 >
                   {/* Gradient overlay based on conversion status */}
                   <div
@@ -88,7 +133,7 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
                     {/* Left: Stage number, label & count */}
                     <div className="flex items-center gap-4">
                       <div
-                        className="flex items-center justify-center w-11 h-11 rounded-full text-white font-bold text-lg shadow-lg transition-transform duration-300 group-hover:scale-110"
+                        className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--status-foreground)] font-bold text-lg shadow-lg transition-transform duration-300 group-hover:scale-110"
                         style={{
                           backgroundColor: color,
                           boxShadow: `0 4px 14px ${color}40`
@@ -110,10 +155,7 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
                     {/* Right: Conversion percentage & status */}
                     <div className="text-right">
                       <div className="flex flex-col items-end">
-                        <span
-                          className="text-3xl font-black tracking-tight tabular-nums"
-                          style={{ color }}
-                        >
+                        <span className={cn('text-3xl font-black tracking-tight tabular-nums', conversionClass)}>
                           {formatPercent(stage.conversion)}
                         </span>
                         <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mt-0.5">
@@ -271,7 +313,7 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
           <div className="flex flex-wrap gap-1.5">
             {Array.from({ length: Math.min(sideFlow.warming.count, 20) }).map((_, i) => (
               <motion.div
-                key={i}
+                key={`warming-${sideFlow.warming.count}-${i}`}
                 initial={{ scaleY: 0 }}
                 animate={{ scaleY: 1 }}
                 transition={{
@@ -296,9 +338,4 @@ export function FullFunnelChart({ funnel, sideFlow, onStageClick }: FullFunnelCh
       </div>
     </div>
   )
-}
-
-// Helper function for class names
-function cn(...classes: (string | undefined | null | boolean)[]) {
-  return classes.filter(Boolean).join(' ')
-}
+})

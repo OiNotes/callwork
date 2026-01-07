@@ -1,25 +1,67 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { ArrowLeft, DollarSign, TrendingUp, Target } from 'lucide-react'
 import { FunnelChart } from '@/components/analytics/FunnelChart'
 import { RedZoneAlerts } from '@/components/analytics/RedZoneAlerts'
 import { formatMoney } from '@/lib/utils/format'
 import type { SettingsShape } from '@/lib/settings/getSettings'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { SkeletonCard } from '@/components/ui/SkeletonCard'
+import { SkeletonChart } from '@/components/ui/SkeletonChart'
+import { logError } from '@/lib/logger'
 
 interface EmployeePageProps {
-  params: Promise<{ id: string }>
+  params: { id: string }
+}
+
+interface EmployeeStats {
+  successfulDeals: number
+  salesAmount: number
+  bookedToZoom1: number
+  zoom1ToZoom2: number
+  zoom2ToContract: number
+  contractToPush: number
+  pushToDeal: number
+  northStar: number
+}
+
+interface EmployeeFunnelStage {
+  id: string
+  stage: string
+  value: number
+  conversion: number
+  benchmark: number
+  isRedZone: boolean
+}
+
+interface EmployeeRedZoneIssue {
+  metric: string
+  current: number
+}
+
+interface EmployeeStatsResponse {
+  employee: { id: string; name: string; role: string }
+  stats: EmployeeStats
+  funnel: EmployeeFunnelStage[]
+  redZones: EmployeeRedZoneIssue[]
+  settings?: SettingsShape
 }
 
 export default function EmployeePage({ params }: EmployeePageProps) {
-  const router = useRouter()
-  const resolvedParams = use(params)
-  const employeeId = resolvedParams.id
+  const employeeId = params.id
 
   const [range, setRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month')
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<EmployeeStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const handleRangeClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const value = event.currentTarget.dataset.range as 'week' | 'month' | 'quarter' | 'year' | undefined
+    if (!value) return
+    setRange(value)
+  }, [])
 
   useEffect(() => {
     async function fetchData() {
@@ -32,7 +74,7 @@ export default function EmployeePage({ params }: EmployeePageProps) {
         }
         setData(json)
       } catch (error) {
-        console.error('Error fetching employee data:', error)
+        logError('Error fetching employee data', error)
         setData(null)
       } finally {
         setLoading(false)
@@ -44,25 +86,38 @@ export default function EmployeePage({ params }: EmployeePageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
-      </div>
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div className="h-5 w-20 rounded-full bg-[var(--muted)]/40 animate-pulse" />
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-full bg-[var(--muted)]/40 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-5 w-40 rounded-full bg-[var(--muted)]/40 animate-pulse" />
+              <div className="h-4 w-24 rounded-full bg-[var(--muted)]/30 animate-pulse" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </div>
+          <SkeletonChart height={320} />
+        </div>
+      </DashboardLayout>
     )
   }
 
   if (!data?.stats || !data?.employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-500">Данные не найдены</p>
-          <button
-            onClick={() => router.back()}
-            className="mt-4 text-blue-600 hover:underline"
-          >
-            Вернуться назад
-          </button>
-        </div>
-      </div>
+      <DashboardLayout>
+        <EmptyState
+          title="Данные не найдены"
+          description="Проверьте, что сотрудник существует и данные доступны."
+          actionLabel="Вернуться назад"
+          actionHref="/dashboard"
+          icon={<Target className="w-6 h-6" />}
+        />
+      </DashboardLayout>
     )
   }
 
@@ -78,9 +133,13 @@ export default function EmployeePage({ params }: EmployeePageProps) {
     contractToPush: benchmarks?.CONTRACT_TO_PUSH ?? 0,
     pushToDeal: benchmarks?.PUSH_TO_DEAL ?? 0,
   }
-  const funnelData = (data.funnel || []).map((stage: any) => ({
-    ...stage,
+  const funnelData = (data.funnel || []).map((stage) => ({
+    id: stage.id,
     label: stage.stage,
+    value: stage.value,
+    conversion: stage.conversion,
+    benchmark: stage.benchmark,
+    isRedZone: stage.isRedZone,
   }))
 
   const severity = (value: number, target: number) => {
@@ -90,7 +149,7 @@ export default function EmployeePage({ params }: EmployeePageProps) {
     return 'info'
   }
 
-  const alerts = (data.redZones || []).map((issue: any, idx: number) => {
+  const alerts = (data.redZones || []).map((issue, idx: number) => {
     const target =
       issue.metric === 'Запись → 1-й Zoom'
         ? norm.bookedToZoom1
@@ -118,21 +177,20 @@ export default function EmployeePage({ params }: EmployeePageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Navigation */}
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] mb-6 transition-colors"
+    <DashboardLayout>
+      <div className="space-y-8 pb-12">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Назад к команде</span>
-        </button>
+          <ArrowLeft className="w-4 h-4" />
+          <span>Назад</span>
+        </Link>
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+          <div className="flex items-center gap-4 md:gap-6">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--info)] flex items-center justify-center text-[var(--primary-foreground)] text-3xl font-semibold shadow-lg">
               {getInitials(employee.name)}
             </div>
             <div>
@@ -142,13 +200,14 @@ export default function EmployeePage({ params }: EmployeePageProps) {
           </div>
 
           {/* Period Filter (Visual Only for MVP) */}
-          <div className="flex bg-white rounded-lg p-1 border border-[var(--border)]">
+          <div className="flex flex-wrap bg-[var(--card)] rounded-lg p-1 border border-[var(--border)]">
             {(['week', 'month', 'quarter'] as const).map((r) => (
               <button
                 key={r}
-                onClick={() => setRange(r)}
+                data-range={r}
+                onClick={handleRangeClick}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${range === r
-                    ? 'bg-[var(--primary)] text-white shadow-sm'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm'
                     : 'text-[var(--muted-foreground)] hover:bg-[var(--muted)]'
                   }`}
               >
@@ -196,7 +255,7 @@ export default function EmployeePage({ params }: EmployeePageProps) {
               <RedZoneAlerts alerts={alerts} />
               {alerts.length === 0 && (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">
-                  <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <div className="w-12 h-12 bg-[var(--success)]/15 text-[var(--success)] rounded-full flex items-center justify-center mx-auto mb-3">
                     <TrendingUp className="w-6 h-6" />
                   </div>
                   <p className="font-medium">Отличная работа!</p>
@@ -211,31 +270,31 @@ export default function EmployeePage({ params }: EmployeePageProps) {
               <div className="space-y-4">
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Запись → 1-й Zoom</span>
-                  <span className={`font-mono font-bold ${stats.bookedToZoom1 < norm.bookedToZoom1 ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.bookedToZoom1 < norm.bookedToZoom1 ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
                     {stats.bookedToZoom1}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">1-й → 2-й Zoom</span>
-                  <span className={`font-mono font-bold ${stats.zoom1ToZoom2 < norm.zoom1ToZoom2 ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.zoom1ToZoom2 < norm.zoom1ToZoom2 ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
                     {stats.zoom1ToZoom2}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">2-й Zoom → Договор</span>
-                  <span className={`font-mono font-bold ${stats.zoom2ToContract < norm.zoom2ToContract ? 'text-orange-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.zoom2ToContract < norm.zoom2ToContract ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
                     {stats.zoom2ToContract}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Договор → Дожим</span>
-                  <span className={`font-mono font-bold ${stats.contractToPush < norm.contractToPush ? 'text-orange-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.contractToPush < norm.contractToPush ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
                     {stats.contractToPush}%
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-[var(--muted)]/30 rounded-lg">
                   <span className="text-sm">Дожим → Оплата</span>
-                  <span className={`font-mono font-bold ${stats.pushToDeal < norm.pushToDeal ? 'text-red-500' : 'text-green-600'}`}>
+                  <span className={`font-mono font-bold ${stats.pushToDeal < norm.pushToDeal ? 'text-[var(--danger)]' : 'text-[var(--success)]'}`}>
                     {stats.pushToDeal}%
                   </span>
                 </div>
@@ -244,6 +303,6 @@ export default function EmployeePage({ params }: EmployeePageProps) {
           </div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

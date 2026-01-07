@@ -1,14 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { Settings, User } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { ArrowLeft, Settings, User } from 'lucide-react'
+import { motion } from '@/lib/motion'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 
 export default function SettingsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Назад</span>
+        </Link>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -23,10 +30,10 @@ export default function SettingsPage() {
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="glass-card p-6 h-full rounded-[24px] cursor-pointer hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all border border-[var(--border)]"
+              className="glass-card p-6 h-full rounded-xl cursor-pointer hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all border border-[var(--border)]"
             >
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-hover)] flex items-center justify-center mb-4 shadow-lg shadow-[var(--primary)]/30">
-                <Settings className="w-6 h-6 text-white" />
+                <Settings className="w-6 h-6 text-[var(--primary-foreground)]" />
               </div>
               <h3 className="text-lg font-bold text-[var(--foreground)] mb-2">Настройки РОПа</h3>
               <p className="text-sm text-[var(--muted-foreground)]">
@@ -35,11 +42,11 @@ export default function SettingsPage() {
             </motion.div>
           </Link>
 
-          <Link href="/profile">
+          <Link href="/dashboard/profile">
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="glass-card p-6 h-full rounded-[24px] cursor-pointer hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all border border-[var(--border)]"
+              className="glass-card p-6 h-full rounded-xl cursor-pointer hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all border border-[var(--border)]"
             >
               <div className="w-12 h-12 rounded-2xl bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center mb-4 group-hover:border-[var(--primary)]/50 transition-colors">
                 <User className="w-6 h-6 text-[var(--foreground)]" />

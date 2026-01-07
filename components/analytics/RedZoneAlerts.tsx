@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from '@/lib/motion'
 
 interface Alert {
     id: string
@@ -18,6 +18,9 @@ interface RedZoneAlertsProps {
 
 export function RedZoneAlerts({ alerts }: RedZoneAlertsProps) {
     const [isExpanded, setIsExpanded] = useState(false)
+    const handleToggleExpanded = useCallback(() => {
+        setIsExpanded((prev) => !prev)
+    }, [])
 
     if (alerts.length === 0) return null
 
@@ -36,7 +39,7 @@ export function RedZoneAlerts({ alerts }: RedZoneAlertsProps) {
         const parts = desc.split(/(\d+(?:\.\d+)?%|Норма: \d+(?:\.\d+)?%)/g)
         return parts.map((part, i) => {
             if (part.match(/(\d+(?:\.\d+)?%|Норма: \d+(?:\.\d+)?%)/)) {
-                return <b key={i} className="font-bold text-[var(--foreground)]">{part}</b>
+                return <b key={`${part}-${i}`} className="font-bold text-[var(--foreground)]">{part}</b>
             }
             return part
         })
@@ -48,7 +51,9 @@ export function RedZoneAlerts({ alerts }: RedZoneAlertsProps) {
                <h2 className="text-lg font-bold text-[var(--foreground)]">Точки внимания</h2>
                {sortedAlerts.length > 3 && (
                    <button 
-                      onClick={() => setIsExpanded(!isExpanded)}
+                      onClick={handleToggleExpanded}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? 'Скрыть алерты' : 'Показать все алерты'}
                       className="text-xs font-medium text-[var(--primary)] hover:underline flex items-center gap-1"
                    >
                       {isExpanded ? 'Свернуть' : `Показать еще ${hiddenCount}`}

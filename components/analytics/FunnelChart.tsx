@@ -1,12 +1,14 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { FunnelStage } from '@/lib/analytics/funnel.client'
 import { ChevronRight } from 'lucide-react'
 
 interface FunnelChartProps {
   data: FunnelStage[]
+  error?: string | null
+  onRetry?: () => void
 }
 
 /**
@@ -18,7 +20,20 @@ interface FunnelChartProps {
  * - Removed "Red Arrow" noise
  * - Simplified layout
  */
-function FunnelChartComponent({ data }: FunnelChartProps) {
+function FunnelChartComponent({ data, error, onRetry }: FunnelChartProps) {
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-32 text-center">
+        <p className="text-sm text-[var(--danger)] mb-3">{error}</p>
+        {onRetry && (
+          <button type="button" onClick={onRetry} className="btn-primary">
+            Повторить
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-[var(--muted-foreground)]">
@@ -71,9 +86,9 @@ function FunnelChartComponent({ data }: FunnelChartProps) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="flex-1 bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-lg p-3 min-h-[80px] flex flex-col justify-between hover:border-blue-300 transition-colors"
+                className="flex-1 bg-[var(--primary)]/10 border border-[var(--primary)]/20 rounded-lg p-3 min-h-[80px] flex flex-col justify-between hover:border-[var(--primary)]/40 transition-colors"
               >
-                 <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 truncate">
+                 <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--primary)] truncate">
                     {stage.label}
                  </div>
                  <div className="mt-2">

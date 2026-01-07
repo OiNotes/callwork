@@ -8,6 +8,8 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { resolvePasswordHash } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -22,13 +24,14 @@ const NAMES = [
 
 async function main() {
   console.log('🚀 Запуск seed для TV Dashboard...\n')
+  const defaultPasswordHash = await resolvePasswordHash({ label: 'seed password' })
 
   // 1. Найти или создать менеджера
   const manager = await prisma.user.upsert({
     where: { email: 'manager@callwork.com' },
     create: {
       email: 'manager@callwork.com',
-      password: '$2b$10$YourHashedPasswordHere',
+      password: defaultPasswordHash,
       name: 'Manager Demo',
       role: 'MANAGER',
       isActive: true
@@ -51,7 +54,7 @@ async function main() {
       where: { email },
       create: {
         email,
-        password: '$2b$10$YourHashedPasswordHere',
+        password: defaultPasswordHash,
         name,
         role: 'EMPLOYEE',
         isActive: true,
@@ -181,7 +184,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Ошибка seed:', e)
+    logError('Ошибка seed', e)
     process.exit(1)
   })
   .finally(async () => {

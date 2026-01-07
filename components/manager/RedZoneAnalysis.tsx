@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { CheckCircle2, AlertTriangle, Target } from 'lucide-react'
 import { RedZone, getSeverityColor, getSeverityIcon } from '@/lib/analytics/recommendations'
 
@@ -13,10 +13,10 @@ export const RedZoneAnalysis = memo(function RedZoneAnalysis({ redZones }: RedZo
   if (redZones.length === 0) {
     return (
       <div className="mt-8 p-6 bg-[var(--success)]/10 rounded-[var(--radius-lg)] border-2 border-[var(--success)]/20">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-[var(--success)] flex items-center justify-center">
-            <CheckCircle2 className="w-7 h-7 text-white" />
-          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-[var(--success)] flex items-center justify-center">
+            <CheckCircle2 className="w-7 h-7 text-[var(--status-foreground)]" />
+            </div>
           <div>
             <h3 className="text-xl font-semibold text-[var(--success)]">Всё отлично!</h3>
             <p className="text-sm text-[var(--success)]/80 mt-1">
@@ -36,16 +36,16 @@ export const RedZoneAnalysis = memo(function RedZoneAnalysis({ redZones }: RedZo
       </h2>
 
       <div className="space-y-4">
-        {redZones.map((zone, i) => (
+        {redZones.map((zone, index) => (
           <motion.div
-            key={i}
+            key={zone.stage}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ delay: index * 0.1 }}
             className={`p-6 rounded-[var(--radius-lg)] border-2 ${getSeverityColor(zone.severity)}`}
           >
             <div className="flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${getSeverityIcon(zone.severity)}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-[var(--primary-foreground)] ${getSeverityIcon(zone.severity)}`}>
                 !
               </div>
               <div className="flex-1">

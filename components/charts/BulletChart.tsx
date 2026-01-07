@@ -1,9 +1,9 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { formatMoney } from '@/lib/utils/format'
-import { TrendingUp, Target, Zap } from 'lucide-react'
+import { calcPercent, roundMoney, roundPercent, toDecimal, toNumber } from '@/lib/utils/decimal'
 
 interface BulletChartProps {
   /** Fact revenue (paid deals) */
@@ -43,21 +43,37 @@ function BulletChartComponent({
   loading = false,
 }: BulletChartProps) {
   const safePlan = plan > 0 ? plan : 1
-  
-  // Scale: We typically show up to 120% or 150% of plan to handle overperformance
-  const maxScale = Math.max(safePlan * 1.2, forecast * 1.1, fact * 1.1)
 
   const metrics = useMemo(() => {
-    const factPercent = (fact / safePlan) * 100
+    const planDecimal = toDecimal(safePlan)
+    const factDecimal = toDecimal(fact)
+    const forecastDecimal = toDecimal(forecast)
+    const maxScaleDecimal = [planDecimal.times(1.2), forecastDecimal.times(1.1), factDecimal.times(1.1)]
+      .reduce((max, value) => (value.greaterThan(max) ? value : max), toDecimal(0))
+    const maxScaleValue = toNumber(roundMoney(maxScaleDecimal))
+
+    const factPercent = planDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(factDecimal, planDecimal))
+      : 0
     
     // Positions as percentages of the CONTAINER width (maxScale)
-    const factWidth = (fact / maxScale) * 100
-    const forecastWidth = (forecast / maxScale) * 100
-    const planPos = (safePlan / maxScale) * 100
+    const factWidth = maxScaleDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(factDecimal, maxScaleDecimal))
+      : 0
+    const forecastWidth = maxScaleDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(forecastDecimal, maxScaleDecimal))
+      : 0
+    const planPos = maxScaleDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(planDecimal, maxScaleDecimal))
+      : 0
 
     // Zones (backgrounds)
-    const poorEnd = (safePlan * 0.6 / maxScale) * 100
-    const avgEnd = (safePlan * 0.85 / maxScale) * 100
+    const poorEnd = maxScaleDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(planDecimal.times(0.6), maxScaleDecimal))
+      : 0
+    const avgEnd = maxScaleDecimal.greaterThan(0)
+      ? roundPercent(calcPercent(planDecimal.times(0.85), maxScaleDecimal))
+      : 0
     // goodEnd is 100% width
 
     return {
@@ -67,9 +83,13 @@ function BulletChartComponent({
       poorEnd,
       avgEnd,
       factPercent,
-      potentialGain: salaryForecast && salaryFact ? salaryForecast - salaryFact : 0,
+      maxScale: maxScaleValue,
+      potentialGain:
+        salaryForecast !== undefined && salaryFact !== undefined
+          ? toNumber(roundMoney(toDecimal(salaryForecast).minus(toDecimal(salaryFact))))
+          : 0,
     }
-  }, [fact, forecast, plan, maxScale, salaryFact, salaryForecast])
+  }, [fact, forecast, safePlan, salaryFact, salaryForecast])
 
   if (loading) {
     return (
@@ -132,7 +152,7 @@ function BulletChartComponent({
           initial={{ width: 0 }}
           animate={{ width: `${metrics.forecastWidth}%` }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="absolute inset-y-[30%] left-0 bg-blue-200 dark:bg-blue-900/30 opacity-50 rounded-r-sm"
+          className="absolute inset-y-[30%] left-0 bg-[var(--info)]/20 opacity-60 rounded-r-sm"
         />
 
         {/* 3. Feature Measure (Fact) - The main bar */}
@@ -145,7 +165,7 @@ function BulletChartComponent({
 
         {/* 4. Comparative Measure (Plan) - Vertical Line */}
         <div 
-          className="absolute top-0 bottom-0 w-[3px] bg-black dark:bg-white z-10"
+          className="absolute top-0 bottom-0 w-[3px] bg-[var(--foreground)] z-10"
           style={{ left: `calc(${metrics.planPos}% - 1.5px)` }}
         >
            {/* Optional: Target Tick Label */}
@@ -164,7 +184,7 @@ function BulletChartComponent({
          <span 
              className="absolute right-0"
          >
-            {formatMoney(maxScale)}
+            {formatMoney(metrics.maxScale)}
          </span>
       </div>
 
@@ -175,7 +195,7 @@ function BulletChartComponent({
             <span>Факт</span>
          </div>
          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-blue-200 dark:bg-blue-900/30 rounded-sm" />
+            <div className="w-3 h-3 bg-[var(--info)]/20 rounded-sm" />
             <span>Прогноз</span>
          </div>
          <div className="flex items-center gap-2">

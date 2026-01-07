@@ -5,6 +5,7 @@
  */
 
 import confetti from 'canvas-confetti'
+import type { Options as ConfettiOptions } from 'canvas-confetti'
 
 /**
  * Конфетти для новой сделки - взрыв справа
@@ -159,7 +160,7 @@ export function confettiBurst() {
     colors: ['#FFD700', '#FFA500', '#FF6B00', '#2997FF', '#10B981']
   }
 
-  function fire(particleRatio: number, opts: any) {
+  function fire(particleRatio: number, opts: ConfettiOptions) {
     confetti({
       ...defaults,
       ...opts,

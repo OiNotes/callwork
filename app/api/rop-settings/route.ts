@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server'
 import { requireManager } from '@/lib/auth/get-session'
 import { prisma } from '@/lib/prisma'
 import { RopSettingsService, type RopSettingsPayload } from '@/lib/services/RopSettingsService'
-import { MOTIVATION_GRADE_PRESETS } from '@/lib/config/motivationGrades'
+import { GoalService } from '@/lib/services/GoalService'
+import { AuditLogService } from '@/lib/services/AuditLogService'
+import { AuditAction } from '@prisma/client'
+import { z } from 'zod'
+import Decimal from 'decimal.js'
+import { getClientIP } from '@/lib/rate-limit'
+import { csrfError, validateOrigin } from '@/lib/csrf'
+import { logError } from '@/lib/logger'
+import { jsonWithPrivateCache } from '@/lib/utils/http'
 
 const clampPeriodDay = (value: number | null | undefined) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return 1
@@ -11,121 +19,187 @@ const clampPeriodDay = (value: number | null | undefined) => {
 
 const safeNumber = (value: unknown) => {
   if (value === null || value === undefined) return undefined
-  const num = typeof value === 'string' ? Number(value) : (value as number)
-  if (!Number.isFinite(num)) return undefined
-  return num
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  try {
+    const decimal = new Decimal(value)
+    if (!decimal.isFinite()) return undefined
+    return decimal.toNumber()
+  } catch {
+    return undefined
+  }
 }
+
+const MAX_MONEY = 1_000_000_000
+
+const moneySchema = z.preprocess((value) => safeNumber(value), z.number().min(0).max(MAX_MONEY))
+const nullableMoneySchema = z.preprocess((value) => {
+  if (value === null) return null
+  return safeNumber(value)
+}, z.number().min(0).max(MAX_MONEY).nullable())
+const percentSchema = z.preprocess((value) => safeNumber(value), z.number().min(0).max(100))
+const ratioSchema = z.preprocess((value) => safeNumber(value), z.number().min(0).max(1))
+const daysSchema = z.preprocess((value) => safeNumber(value), z.number().int().min(0).max(60))
+const minutesSchema = z.preprocess((value) => safeNumber(value), z.number().int().min(1).max(180))
+const dropPercentSchema = z.preprocess((value) => safeNumber(value), z.number().int().min(0).max(100))
+const activityTargetSchema = z.preprocess(
+  (value) => safeNumber(value),
+  z.number().int().min(0).max(100)
+)
+const northStarSchema = z.preprocess((value) => safeNumber(value), z.number().min(0).max(100))
+const periodDaySchema = z.preprocess((value) => safeNumber(value), z.number().int().min(1).max(31))
+
+const ropSettingsSchema = z.object({
+  departmentGoal: nullableMoneySchema.optional(),
+  conversionBenchmarks: z.record(z.string(), percentSchema).optional(),
+  alertThresholds: z
+    .object({
+      warning: ratioSchema.optional(),
+      critical: ratioSchema.optional(),
+    })
+    .optional(),
+  alertNoReportDays: daysSchema.optional(),
+  alertNoDealsDays: daysSchema.optional(),
+  alertConversionDrop: dropPercentSchema.optional(),
+  telegramRegistrationTtl: minutesSchema.optional(),
+  telegramReportTtl: minutesSchema.optional(),
+  activityScoreTarget: activityTargetSchema.optional(),
+  northStarTarget: northStarSchema.optional(),
+  salesPerDeal: moneySchema.optional(),
+  motivationGrades: z
+    .array(
+      z.object({
+        minTurnover: moneySchema,
+        maxTurnover: nullableMoneySchema.optional(),
+        commissionRate: ratioSchema,
+      })
+    )
+    .optional(),
+  periodStartDay: periodDaySchema.optional(),
+  managerPlans: z
+    .array(
+      z.object({
+        id: z.string().cuid(),
+        monthlyGoal: nullableMoneySchema,
+      })
+    )
+    .optional(),
+}).strict()
 
 export async function GET() {
   try {
     const manager = await requireManager()
     const settings = await RopSettingsService.getEffectiveSettings(manager.id)
     const managers = await prisma.user.findMany({
-      where: { role: 'MANAGER', isActive: true },
-      select: { id: true, name: true, monthlyGoal: true },
+      where: { id: manager.id, isActive: true },
+      select: { id: true, name: true },
       orderBy: { name: 'asc' },
     })
+    const managerGoals = await GoalService.getUsersGoals(managers.map((m) => m.id))
 
-    return NextResponse.json({ settings, managers })
+    return jsonWithPrivateCache({
+      settings,
+      managers: managers.map((m) => ({
+        ...m,
+        monthlyGoal: managerGoals[m.id] ?? 0,
+      })),
+    })
   } catch (error) {
-    console.error('GET /api/rop-settings error', error)
+    logError('GET /api/rop-settings error', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function PUT(request: Request) {
+  if (!validateOrigin(request)) {
+    return csrfError()
+  }
+
   try {
     const manager = await requireManager()
-    const managerExists = await prisma.user.findUnique({ where: { id: manager.id } })
+    const managerExists = await prisma.user.findFirst({
+      where: { id: manager.id, isActive: true },
+      select: { id: true },
+    })
     const targetManagerId = managerExists ? manager.id : null
     const body = await request.json()
+    const parsed = ropSettingsSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues }, { status: 400 })
+    }
+    const data = parsed.data
 
     const payload: RopSettingsPayload = {}
 
-    const departmentGoal = safeNumber(body.departmentGoal)
-    if (departmentGoal !== undefined) payload.departmentGoal = departmentGoal
+    if (data.departmentGoal !== undefined) payload.departmentGoal = data.departmentGoal
 
-    if (body.conversionBenchmarks) {
-      const entries = Object.entries(body.conversionBenchmarks as Record<string, unknown>).reduce(
-        (acc: Record<string, number>, [key, value]) => {
-          const parsed = safeNumber(value)
-          if (parsed !== undefined) acc[key] = parsed
-          return acc
-        },
-        {}
-      )
-      if (Object.keys(entries).length > 0) {
-        payload.conversionBenchmarks = entries as any
-      }
+    if (data.conversionBenchmarks && Object.keys(data.conversionBenchmarks).length > 0) {
+      payload.conversionBenchmarks = data.conversionBenchmarks
     }
 
-    if (body.alertThresholds) {
-      const warning = safeNumber(body.alertThresholds.warning)
-      const critical = safeNumber(body.alertThresholds.critical)
-      const alertPayload: Record<string, number> = {}
-      if (warning !== undefined) alertPayload.warning = warning
-      if (critical !== undefined) alertPayload.critical = critical
-      if (Object.keys(alertPayload).length > 0) {
-        payload.alertThresholds = alertPayload as any
-      }
+    if (data.alertThresholds && Object.keys(data.alertThresholds).length > 0) {
+      payload.alertThresholds = data.alertThresholds
     }
 
-    const activityTarget = safeNumber(body.activityScoreTarget)
-    if (activityTarget !== undefined) payload.activityScoreTarget = activityTarget
+    if (data.alertNoReportDays !== undefined) payload.alertNoReportDays = data.alertNoReportDays
+    if (data.alertNoDealsDays !== undefined) payload.alertNoDealsDays = data.alertNoDealsDays
+    if (data.alertConversionDrop !== undefined) {
+      payload.alertConversionDrop = data.alertConversionDrop
+    }
+    if (data.telegramRegistrationTtl !== undefined) {
+      payload.telegramRegistrationTtl = data.telegramRegistrationTtl
+    }
+    if (data.telegramReportTtl !== undefined) payload.telegramReportTtl = data.telegramReportTtl
 
-    const northStarTarget = safeNumber(body.northStarTarget)
-    if (northStarTarget !== undefined) payload.northStarTarget = northStarTarget
+    if (data.activityScoreTarget !== undefined) payload.activityScoreTarget = data.activityScoreTarget
 
-    const salesPerDeal = safeNumber(body.salesPerDeal)
-    if (salesPerDeal !== undefined) payload.salesPerDeal = salesPerDeal
+    if (data.northStarTarget !== undefined) payload.northStarTarget = data.northStarTarget
 
-    if (Array.isArray(body.motivationGrades)) {
-      const grades = (body.motivationGrades as any[])
-        .map((grade) => {
-          const cleaned: Record<string, number | null> = {}
-          const min = safeNumber(grade.minTurnover)
-          const max = grade.maxTurnover === null ? null : safeNumber(grade.maxTurnover)
-          const commission = safeNumber(grade.commissionRate)
-          if (min !== undefined) cleaned.minTurnover = min
-          if (max !== undefined) cleaned.maxTurnover = max
-          if (max === null) cleaned.maxTurnover = null
-          if (commission !== undefined) cleaned.commissionRate = commission
-          return cleaned
-        })
-        .filter((g) => Object.keys(g).length > 0)
-      if (grades.length > 0) {
-        payload.motivationGrades = grades as any
-      }
+    if (data.salesPerDeal !== undefined) payload.salesPerDeal = data.salesPerDeal
+
+    if (data.motivationGrades && data.motivationGrades.length > 0) {
+      payload.motivationGrades = data.motivationGrades.map((grade) => ({
+        minTurnover: grade.minTurnover,
+        maxTurnover: grade.maxTurnover ?? null,
+        commissionRate: grade.commissionRate,
+      }))
     }
 
-    const periodStartDay = safeNumber(body.periodStartDay)
-    if (periodStartDay !== undefined) payload.periodStartDay = clampPeriodDay(periodStartDay)
+    if (data.periodStartDay !== undefined) {
+      payload.periodStartDay = clampPeriodDay(data.periodStartDay)
+    }
 
     await RopSettingsService.upsertSettings(targetManagerId, payload)
 
-    if (Array.isArray(body.managerPlans)) {
-      const updates = (body.managerPlans as any[])
+    if (data.managerPlans) {
+      const updates = data.managerPlans
+        .filter((plan) => plan.id === manager.id)
         .map((plan) => ({
-          id: plan.id as string,
-          monthlyGoal:
-            plan.monthlyGoal === null ? null : safeNumber(plan.monthlyGoal),
+          id: plan.id,
+          monthlyGoal: plan.monthlyGoal,
         }))
-        .filter((p) => p.id && (p.monthlyGoal === null || typeof p.monthlyGoal === 'number'))
 
       await Promise.all(
         updates.map((plan) =>
-          prisma.user.update({
-            where: { id: plan.id },
-            data: { monthlyGoal: plan.monthlyGoal },
-          })
+          GoalService.setUserGoal(plan.id, plan.monthlyGoal ?? null)
         )
       )
     }
 
+    await AuditLogService.log({
+      action: AuditAction.SETTINGS_CHANGE,
+      userId: manager.id,
+      ipAddress: getClientIP(request),
+      userAgent: request.headers.get('user-agent'),
+      metadata: {
+        updatedFields: Object.keys(payload),
+        managerPlansUpdated: data.managerPlans?.length ?? 0,
+      },
+    })
+
     const settings = await RopSettingsService.getEffectiveSettings(manager.id)
     return NextResponse.json({ settings })
   } catch (error) {
-    console.error('PUT /api/rop-settings error', error)
+    logError('PUT /api/rop-settings error', error)
     const message = error instanceof Error ? error.message : 'Internal server error'
     const status =
       message === 'Unauthorized'

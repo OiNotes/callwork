@@ -153,92 +153,101 @@ export function ManualReportForm() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Дата отчёта</label>
+            <label htmlFor="reportDate" className="text-sm text-[var(--muted-foreground)]">Дата отчёта</label>
             <input
+              id="reportDate"
               type="date"
               value={form.date}
               onChange={(e) => updateField('date', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Записано на Zoom</label>
+            <label htmlFor="zoomAppointments" className="text-sm text-[var(--muted-foreground)]">Записано на Zoom</label>
             <input
+              id="zoomAppointments"
               type="number"
               min={0}
               value={form.zoomAppointments}
               onChange={(e) => updateField('zoomAppointments', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Проведено 1-х Zoom</label>
+            <label htmlFor="pzmConducted" className="text-sm text-[var(--muted-foreground)]">Проведено 1-х Zoom</label>
             <input
+              id="pzmConducted"
               type="number"
               min={0}
               value={form.pzmConducted}
               onChange={(e) => updateField('pzmConducted', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Проведено 2-х Zoom</label>
+            <label htmlFor="vzmConducted" className="text-sm text-[var(--muted-foreground)]">Проведено 2-х Zoom</label>
             <input
+              id="vzmConducted"
               type="number"
               min={0}
               value={form.vzmConducted}
               onChange={(e) => updateField('vzmConducted', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Разбор договора</label>
+            <label htmlFor="contractReviewCount" className="text-sm text-[var(--muted-foreground)]">Разбор договора</label>
             <input
+              id="contractReviewCount"
               type="number"
               min={0}
               value={form.contractReviewCount}
               onChange={(e) => updateField('contractReviewCount', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Дожимы</label>
+            <label htmlFor="pushCount" className="text-sm text-[var(--muted-foreground)]">Дожимы</label>
             <input
+              id="pushCount"
               type="number"
               min={0}
               value={form.pushCount}
               onChange={(e) => updateField('pushCount', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Оплаты / сделки</label>
+            <label htmlFor="successfulDeals" className="text-sm text-[var(--muted-foreground)]">Оплаты / сделки</label>
             <input
+              id="successfulDeals"
               type="number"
               min={0}
               value={form.successfulDeals}
               onChange={(e) => updateField('successfulDeals', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Сумма продаж за месяц</label>
+            <label htmlFor="monthlySalesAmount" className="text-sm text-[var(--muted-foreground)]">Сумма продаж за месяц</label>
             <input
+              id="monthlySalesAmount"
               type="number"
               min={0}
               value={form.monthlySalesAmount}
               onChange={(e) => updateField('monthlySalesAmount', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm text-[var(--muted-foreground)]">Прогрев (теплые)</label>
+            <label htmlFor="warmingUpCount" className="text-sm text-[var(--muted-foreground)]">Прогрев (теплые)</label>
             <input
+              id="warmingUpCount"
               type="number"
               min={0}
               value={form.warmingUpCount}
               onChange={(e) => updateField('warmingUpCount', e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
             />
           </div>
         </div>
@@ -249,32 +258,47 @@ export function ManualReportForm() {
               Отказы (итого)
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <input
-                type="number"
-                min={0}
-                value={form.refusalsCount}
-                onChange={(e) => updateField('refusalsCount', e.target.value)}
-                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
-                placeholder="Кол-во отказов"
-              />
-              <input
-                type="text"
-                value={form.refusalsReasons}
-                onChange={(e) => updateField('refusalsReasons', e.target.value)}
-                className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
-                placeholder="Причины (опционально)"
-              />
+              <div className="space-y-1">
+                <label htmlFor="refusalsCount" className="text-xs text-[var(--muted-foreground)]">
+                  Кол-во отказов
+                </label>
+                <input
+                  id="refusalsCount"
+                  type="number"
+                  min={0}
+                  value={form.refusalsCount}
+                  onChange={(e) => updateField('refusalsCount', e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
+                  placeholder="Кол-во отказов"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="refusalsReasons" className="text-xs text-[var(--muted-foreground)]">
+                  Причины (опционально)
+                </label>
+                <input
+                  id="refusalsReasons"
+                  type="text"
+                  value={form.refusalsReasons}
+                  onChange={(e) => updateField('refusalsReasons', e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
+                  placeholder="Причины (опционально)"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {refusalStageMeta.map((stage) => (
                 <div key={stage.key} className="space-y-1">
-                  <label className="text-xs text-[var(--muted-foreground)]">{stage.label}</label>
+                  <label htmlFor={`refusalsByStage-${stage.key}`} className="text-xs text-[var(--muted-foreground)]">
+                    {stage.label}
+                  </label>
                   <input
+                    id={`refusalsByStage-${stage.key}`}
                     type="number"
                     min={0}
                     value={form.refusalsByStage[stage.key]}
                     onChange={(e) => updateRefusalStage(stage.key, e.target.value)}
-                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
                   />
                 </div>
               ))}
@@ -282,12 +306,15 @@ export function ManualReportForm() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-[var(--foreground)]">Комментарий (что получилось / сложности / нужна помощь)</label>
+            <label htmlFor="reportComment" className="text-sm font-medium text-[var(--foreground)]">
+              Комментарий (что получилось / сложности / нужна помощь)
+            </label>
             <textarea
+              id="reportComment"
               value={form.comment}
               onChange={(e) => updateField('comment', e.target.value)}
               rows={6}
-              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-white"
+              className="w-full rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--input)]"
               placeholder="Расскажите, что получилось, где нужны разборы звонков"
             />
             <div className="text-xs text-[var(--muted-foreground)] bg-[var(--muted)]/20 rounded-lg p-3">
@@ -300,8 +327,8 @@ export function ManualReportForm() {
           <div
             className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
               message.type === 'success'
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
+                ? 'bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20'
+                : 'bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20'
             }`}
           >
             {message.type === 'success' ? <ShieldCheck className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
@@ -316,7 +343,7 @@ export function ManualReportForm() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] text-white px-4 py-2 font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] px-4 py-2 font-medium hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Сохранить отчёт

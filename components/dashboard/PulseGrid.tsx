@@ -1,11 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { TrendingUp, TrendingDown, Target, DollarSign, Activity } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/format'
 import { NorthStarKpi } from '@/lib/calculations/funnel'
 import { InlineSparkline } from '@/components/charts/InlineSparkline'
+import { calcPercent, roundPercent, toDecimal } from '@/lib/utils/decimal'
 
 interface PulseGridProps {
   stats: {
@@ -21,14 +22,27 @@ interface PulseGridProps {
   trendData?: { date: string; sales: number; deals: number }[]
   /** Forecasted sales amount */
   forecastSales?: number
+  errorMessage?: string | null
+  onRetry?: () => void
 }
 
-export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales = 0 }: PulseGridProps) {
+export function PulseGrid({
+  stats,
+  northStarKpi,
+  trendData = [],
+  forecastSales = 0,
+  errorMessage,
+  onRetry
+}: PulseGridProps) {
   const salesProgress =
-    stats.planSales > 0 ? Math.min(100, (stats.salesAmount / stats.planSales) * 100) : 0
+    stats.planSales > 0
+      ? Math.min(100, roundPercent(calcPercent(toDecimal(stats.salesAmount), toDecimal(stats.planSales))))
+      : 0
   
   const dealsProgress =
-    stats.planDeals > 0 ? Math.min(100, (stats.successfulDeals / stats.planDeals) * 100) : 0
+    stats.planDeals > 0
+      ? Math.min(100, roundPercent(calcPercent(toDecimal(stats.successfulDeals), toDecimal(stats.planDeals))))
+      : 0
 
   const conversionDiff = stats.totalConversion - stats.prevConversion
   const isConversionUp = conversionDiff >= 0
@@ -56,7 +70,25 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
   const dealsTrend = useMemo(() => getTrend(dealsHistory), [dealsHistory])
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+    <div className="space-y-4 mb-8">
+      {errorMessage && (
+        <div className="glass-card p-4 border border-[var(--danger)]/30 bg-[var(--danger)]/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-[var(--danger)]">
+            {errorMessage}
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="btn-primary"
+            >
+              Повторить
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
       
       {/* Card 1: Revenue (Main KPI) - Blue Theme */}
       <motion.div
@@ -75,7 +107,7 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
               <h3 className="text-3xl font-black text-[var(--foreground)] tabular-nums tracking-tight leading-none">
                 {formatMoney(stats.salesAmount)}
               </h3>
-              <div className={`flex items-center gap-0.5 text-[10px] font-bold mb-1 ${salesTrend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <div className={`flex items-center gap-0.5 text-[10px] font-bold mb-1 ${salesTrend >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                  {salesTrend >= 0 ? '+' : ''}{salesTrend}%
               </div>
           </div>
@@ -89,12 +121,12 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
                 className="absolute top-0 left-0 h-full bg-[var(--primary)] rounded-full"
               />
               {/* Target Line (100%) */}
-              <div className="absolute top-0 bottom-0 w-0.5 bg-black/20 dark:bg-white/20 left-[calc(100%-1px)]" title="Цель" />
+              <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--foreground)]/20 left-[calc(100%-1px)]" title="Цель" />
           </div>
 
           {/* Forecast Subtext */}
           <div className="flex items-center gap-2 z-10 relative">
-             <div className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
+             <div className="text-[10px] font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-1.5 py-0.5 rounded">
                 Прогноз: {formatMoney(forecastSales)}
              </div>
              <span className="text-[10px] text-[var(--muted-foreground)] tabular-nums">
@@ -135,19 +167,21 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
               <h3 className="text-3xl font-black text-[var(--foreground)] tabular-nums tracking-tight leading-none">
                 {stats.successfulDeals}
               </h3>
-              <div className={`flex items-center gap-0.5 text-[10px] font-bold mb-1 ${dealsTrend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <div className={`flex items-center gap-0.5 text-[10px] font-bold mb-1 ${dealsTrend >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                  {dealsTrend >= 0 ? '+' : ''}{dealsTrend}%
               </div>
           </div>
 
-          {/* Progress Bar */}
+          {/* Progress Bar with Target Line */}
           <div className="relative h-1.5 w-full bg-[var(--muted)]/30 rounded-full overflow-hidden mt-3 mb-2">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${dealsProgress}%` }}
                 transition={{ duration: 1 }}
-                className="absolute top-0 left-0 h-full bg-orange-500 rounded-full"
+                className="absolute top-0 left-0 h-full bg-[var(--primary)] rounded-full"
               />
+              {/* Target Line (100%) */}
+              <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--foreground)]/20 left-[calc(100%-1px)]" title="Цель" />
           </div>
 
            <div className="flex items-center gap-2 mt-1">
@@ -205,7 +239,7 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
            </div>
            
            <div className="flex items-center gap-2">
-              <div className={`flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${isConversionUp ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400' : 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-400'}`}>
+              <div className={`flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded ${isConversionUp ? 'text-[var(--success)] bg-[var(--success)]/10' : 'text-[var(--danger)] bg-[var(--danger)]/10'}`}>
                  {isConversionUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                  {Math.abs(conversionDiff)}%
               </div>
@@ -224,7 +258,7 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
       >
         <div>
            <div className="flex justify-between items-start mb-2">
-             <span className="text-xs font-bold text-[var(--muted-foreground)] uppercase tracking-wider text-purple-600 dark:text-purple-400">North Star Metric</span>
+             <span className="text-xs font-bold uppercase tracking-wider text-[var(--info)]">North Star Metric</span>
              <Target className="w-4 h-4 text-[var(--muted-foreground)]" />
            </div>
            <h3 className="text-3xl font-black text-[var(--foreground)] tabular-nums tracking-tight">
@@ -250,12 +284,13 @@ export function PulseGrid({ stats, northStarKpi, trendData = [], forecastSales =
 
            <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]/50">
               <span className="text-[10px] text-[var(--muted-foreground)]">Цель: {northStarTarget}%</span>
-              <span className={`text-[11px] font-bold ${northStarGood ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <span className={`text-[11px] font-bold ${northStarGood ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
                  {northStarDelta >= 0 ? '+' : ''}{northStarDelta.toFixed(1)}%
               </span>
            </div>
         </div>
       </motion.div>
+      </div>
     </div>
   )
 }

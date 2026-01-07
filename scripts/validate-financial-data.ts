@@ -18,12 +18,13 @@
 import { prisma } from '@/lib/prisma'
 import { GoalService } from '@/lib/services/GoalService'
 import { Decimal } from '@prisma/client/runtime/library'
+import { logError } from '@/lib/logger'
 
 interface ValidationIssue {
   severity: 'ERROR' | 'WARNING' | 'INFO'
   category: string
   message: string
-  data?: any
+  data?: unknown
 }
 
 const issues: ValidationIssue[] = []
@@ -343,6 +344,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('❌ Ошибка при валидации:', error)
+  logError('Ошибка при валидации', error)
   process.exit(1)
 })

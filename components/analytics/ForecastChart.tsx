@@ -1,8 +1,11 @@
 'use client'
 
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid, Legend } from 'recharts'
-import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Target, Calendar } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine } from 'recharts'
+import { motion } from '@/lib/motion'
+import { TrendingUp, TrendingDown, Calendar, Target } from 'lucide-react'
+import { roundMoney, toDecimal, toNumber } from '@/lib/utils/decimal'
+import { SkeletonCard } from '@/components/ui/SkeletonCard'
+import { SkeletonChart } from '@/components/ui/SkeletonChart'
 
 interface ForecastData {
   forecast: {
@@ -27,13 +30,43 @@ interface ForecastData {
   }>
 }
 
-interface ForecastChartProps {
-  data: ForecastData
-  userName?: string
+interface ForecastChartPoint {
+  day: number
+  plan?: number
+  actual?: number
+  forecast?: number
 }
 
-export function ForecastChart({ data, userName }: ForecastChartProps) {
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: ForecastChartPoint }>
+}
+
+interface ForecastChartProps {
+  data?: ForecastData
+  userName?: string
+  loading?: boolean
+}
+
+export function ForecastChart({ data, userName, loading = false }: ForecastChartProps) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-6">
+        <SkeletonCard lines={2} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={3} />
+        </div>
+        <SkeletonChart height={400} />
+      </div>
+    )
+  }
+
   const { forecast, chartData } = data
+  const expectedDelta = toDecimal(forecast.current).minus(forecast.expectedByNow)
+  const expectedDeltaAbs = toNumber(roundMoney(expectedDelta.abs()))
+  const isAheadOfPlan = expectedDelta.greaterThanOrEqualTo(0)
 
   // Форматирование денег
   const formatMoney = (value: number) => {
@@ -46,7 +79,7 @@ export function ForecastChart({ data, userName }: ForecastChartProps) {
   }
 
   // Кастомный Tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (!active || !payload || payload.length === 0) return null
 
     const data = payload[0].payload
@@ -119,7 +152,7 @@ export function ForecastChart({ data, userName }: ForecastChartProps) {
         >
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-[var(--warning)] rounded-full flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
+              <TrendingUp className="w-5 h-5 text-[var(--status-foreground)]" />
             </div>
             <p className="text-sm font-medium text-[var(--muted-foreground)]">Прогноз на конец месяца</p>
           </div>
@@ -143,9 +176,9 @@ export function ForecastChart({ data, userName }: ForecastChartProps) {
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${forecast.isPacingGood ? 'bg-[var(--success)]' : 'bg-[var(--danger)]'
               }`}>
               {forecast.isPacingGood ? (
-                <TrendingUp className="w-5 h-5 text-white" />
+                <TrendingUp className="w-5 h-5 text-[var(--status-foreground)]" />
               ) : (
-                <TrendingDown className="w-5 h-5 text-white" />
+                <TrendingDown className="w-5 h-5 text-[var(--status-foreground)]" />
               )}
             </div>
             <p className="text-sm font-medium text-[var(--muted-foreground)]">Темп выполнения</p>
@@ -179,7 +212,7 @@ export function ForecastChart({ data, userName }: ForecastChartProps) {
             <YAxis
               stroke="var(--muted-foreground)"
               style={{ fontSize: '12px', fontFamily: 'system-ui' }}
-              tickFormatter={(value) => `${(value / 1000).toFixed(0)}к`}
+              tickFormatter={(value) => `${toDecimal(value).dividedBy(1000).toDecimalPlaces(0).toNumber()}к`}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -248,10 +281,10 @@ export function ForecastChart({ data, userName }: ForecastChartProps) {
           <p className="text-3xl font-semibold text-[var(--foreground)] tracking-tight">
             {formatMoney(forecast.expectedByNow)}
           </p>
-          <p className={`text-sm mt-2 font-medium ${forecast.current >= forecast.expectedByNow ? 'text-[var(--success)]' : 'text-[var(--danger)]'
+          <p className={`text-sm mt-2 font-medium ${isAheadOfPlan ? 'text-[var(--success)]' : 'text-[var(--danger)]'
             }`}>
-            {forecast.current >= forecast.expectedByNow ? 'Выше плана' : 'Ниже плана'} на{' '}
-            {formatMoney(Math.abs(forecast.current - forecast.expectedByNow))}
+            {isAheadOfPlan ? 'Выше плана' : 'Ниже плана'} на{' '}
+            {formatMoney(expectedDeltaAbs)}
           </p>
         </div>
       </div>

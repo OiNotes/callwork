@@ -2,6 +2,9 @@
 
 import { memo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Bar, ComposedChart, Line } from 'recharts'
+import { toDecimal } from '@/lib/utils/decimal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { BarChart2 } from 'lucide-react'
 
 interface TrendData {
   date: string
@@ -15,6 +18,18 @@ interface PerformanceTrendChartProps {
 }
 
 export const PerformanceTrendChart = memo(function PerformanceTrendChart({ data, className }: PerformanceTrendChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className={className}>
+        <EmptyState
+          icon={<BarChart2 className="w-6 h-6" />}
+          title="Нет данных"
+          description="Данные появятся после создания отчётов"
+        />
+      </div>
+    )
+  }
+
   return (
     <div className={className}>
       <ResponsiveContainer width="100%" height="100%">
@@ -46,14 +61,14 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({ data,
             tick={{ fill: 'var(--primary)', fontSize: 11, fontWeight: 500 }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+            tickFormatter={(value) => `${toDecimal(value).dividedBy(1000).toDecimalPlaces(0).toNumber()}k`}
           />
           
           {/* Right Axis: Quantity (Deals) - Orange/Contrast */}
           <YAxis
             yAxisId="right"
             orientation="right"
-            tick={{ fill: '#F97316', fontSize: 11, fontWeight: 500 }} // Orange-500
+            tick={{ fill: 'var(--warning)', fontSize: 11, fontWeight: 500 }}
             tickLine={false}
             axisLine={false}
           />
@@ -93,7 +108,7 @@ export const PerformanceTrendChart = memo(function PerformanceTrendChart({ data,
             type="monotone" // Smooth interpolation
             dataKey="deals"
             name="Сделки (шт)"
-            stroke="#F97316" // Orange
+            stroke="var(--warning)"
             strokeWidth={3}
             dot={false} // Cleaner look without dots everywhere
             activeDot={{ r: 6, strokeWidth: 0 }}

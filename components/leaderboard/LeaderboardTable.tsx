@@ -1,8 +1,11 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
+import { useCallback } from 'react'
 import { Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { SkeletonTable } from '@/components/ui/SkeletonTable'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface LeaderboardItem {
   id: string
@@ -19,10 +22,41 @@ interface LeaderboardItem {
 interface LeaderboardTableProps {
   leaderboard: LeaderboardItem[]
   period: 'day' | 'week' | 'month'
-  onPeriodChange: (period: string) => void
+  onPeriodChange: (period: 'day' | 'week' | 'month') => void
+  loading?: boolean
+  pagination?: {
+    page: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+  } | null
+  onPageChange?: (page: number) => void
 }
 
-export function LeaderboardTable({ leaderboard, period, onPeriodChange }: LeaderboardTableProps) {
+export function LeaderboardTable({
+  leaderboard,
+  period,
+  onPeriodChange,
+  loading = false,
+  pagination,
+  onPageChange,
+}: LeaderboardTableProps) {
+  const handlePeriodClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const value = event.currentTarget.dataset.period as 'day' | 'week' | 'month' | undefined
+    if (!value) return
+    onPeriodChange(value)
+  }, [onPeriodChange])
+
+  const handlePrev = useCallback(() => {
+    if (!pagination?.hasPrev || !onPageChange) return
+    onPageChange(Math.max(1, pagination.page - 1))
+  }, [pagination, onPageChange])
+
+  const handleNext = useCallback(() => {
+    if (!pagination?.hasNext || !onPageChange) return
+    onPageChange(pagination.page + 1)
+  }, [pagination, onPageChange])
+
   const formatMoney = (value: number) => {
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
@@ -35,10 +69,11 @@ export function LeaderboardTable({ leaderboard, period, onPeriodChange }: Leader
     <div className="space-y-4">
       {/* Compact Tabs */}
       <div className="flex gap-1 bg-[var(--muted)]/30 p-1 rounded-lg w-fit">
-        {['day', 'week', 'month'].map((p) => (
+        {(['day', 'week', 'month'] as const).map((p) => (
           <button
             key={p}
-            onClick={() => onPeriodChange(p)}
+            data-period={p}
+            onClick={handlePeriodClick}
             className={cn(
               "px-3 py-1 rounded text-xs font-medium transition-all",
               period === p
@@ -52,56 +87,88 @@ export function LeaderboardTable({ leaderboard, period, onPeriodChange }: Leader
       </div>
 
       {/* List */}
-      <div className="border rounded-lg border-[var(--border)] bg-[var(--card)] divide-y divide-[var(--border)] overflow-hidden">
-        {leaderboard.map((item, idx) => (
+      {loading ? (
+        <SkeletonTable rows={6} columns={4} />
+      ) : leaderboard.length === 0 ? (
+        <EmptyState
+          title="Пока нет данных"
+          description="Сдайте первый отчёт, чтобы увидеть рейтинг команды."
+          actionLabel="Создать отчёт"
+          actionHref="/dashboard/report"
+          icon={<Trophy className="w-6 h-6" />}
+        />
+      ) : (
+        <div className="border rounded-lg border-[var(--border)] bg-[var(--card)] divide-y divide-[var(--border)] overflow-hidden">
+          {leaderboard.map((item, idx) => (
             <motion.div 
-                key={item.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: idx * 0.03 }}
-                className="flex items-center gap-3 p-3 hover:bg-[var(--muted)]/20 transition-colors text-sm"
+              key={item.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: idx * 0.03 }}
+              className="flex items-center gap-3 p-3 hover:bg-[var(--muted)]/20 transition-colors text-sm"
             >
-                {/* Rank */}
-                <div className={cn(
-                    "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0",
-                    item.rank === 1 ? "bg-yellow-500 text-white" :
-                    item.rank === 2 ? "bg-slate-400 text-white" :
-                    item.rank === 3 ? "bg-orange-700 text-white" :
-                    "bg-[var(--muted)] text-[var(--muted-foreground)]"
-                )}>
-                    {item.rank}
+              {/* Rank */}
+              <div className={cn(
+                "w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0",
+                item.rank === 1 ? "bg-[var(--warning)]/20 text-[var(--warning)]" :
+                item.rank === 2 ? "bg-[var(--info)]/20 text-[var(--info)]" :
+                item.rank === 3 ? "bg-[var(--primary)]/20 text-[var(--primary)]" :
+                "bg-[var(--muted)] text-[var(--muted-foreground)]"
+              )}>
+                {item.rank}
+              </div>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0 font-medium text-[var(--foreground)] truncate flex items-center gap-2">
+                {item.name}
+                {item.medal === 'gold' && <Trophy className="w-3 h-3 text-[var(--warning)]" />}
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="flex items-center gap-6 text-right">
+                <div className="hidden sm:block w-24">
+                  <div className="text-[var(--foreground)]">{item.deals}</div>
+                  <div className="text-[10px] text-[var(--muted-foreground)]">сделок</div>
+                </div>
+                
+                <div className="hidden sm:block w-24">
+                  <div className="text-[var(--foreground)]">{formatMoney(item.avgCheck)}</div>
+                  <div className="text-[10px] text-[var(--muted-foreground)]">ср. чек</div>
                 </div>
 
-                {/* Name */}
-                <div className="flex-1 min-w-0 font-medium text-[var(--foreground)] truncate flex items-center gap-2">
-                    {item.name}
-                    {item.medal === 'gold' && <Trophy className="w-3 h-3 text-yellow-500" />}
+                <div className="w-28">
+                  <div className="text-[var(--primary)] font-bold">{formatMoney(item.sales)}</div>
+                  {item.goalProgress !== null && (
+                    <div className="text-[10px] text-[var(--success)] font-medium">
+                      {item.goalProgress}% цели
+                    </div>
+                  )}
                 </div>
-
-                {/* Metrics Grid */}
-                <div className="flex items-center gap-6 text-right">
-                    <div className="hidden sm:block w-24">
-                        <div className="text-[var(--foreground)]">{item.deals}</div>
-                        <div className="text-[10px] text-[var(--muted-foreground)]">сделок</div>
-                    </div>
-                    
-                    <div className="hidden sm:block w-24">
-                        <div className="text-[var(--foreground)]">{formatMoney(item.avgCheck)}</div>
-                        <div className="text-[10px] text-[var(--muted-foreground)]">ср. чек</div>
-                    </div>
-
-                    <div className="w-28">
-                        <div className="text-[var(--primary)] font-bold">{formatMoney(item.sales)}</div>
-                        {item.goalProgress !== null && (
-                            <div className="text-[10px] text-[var(--success)] font-medium">
-                                {item.goalProgress}% цели
-                            </div>
-                        )}
-                    </div>
-                </div>
+              </div>
             </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+          <button
+            onClick={handlePrev}
+            disabled={!pagination.hasPrev}
+            className="px-3 py-1 rounded-md border border-[var(--border)] disabled:opacity-50"
+          >
+            Назад
+          </button>
+          <span>Страница {pagination.page} из {pagination.totalPages}</span>
+          <button
+            onClick={handleNext}
+            disabled={!pagination.hasNext}
+            className="px-3 py-1 rounded-md border border-[var(--border)] disabled:opacity-50"
+          >
+            Вперёд
+          </button>
+        </div>
+      )}
     </div>
   )
 }

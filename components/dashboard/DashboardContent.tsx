@@ -1,19 +1,24 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from '@/lib/motion'
 import { PulseGrid } from '@/components/dashboard/PulseGrid'
 import { FunnelChart } from '@/components/analytics/FunnelChart'
 import { ManagersTable } from '@/components/analytics/ManagersTable'
 import { RedZoneAlerts } from '@/components/analytics/RedZoneAlerts'
-import { PerformanceTrendChart } from '@/components/charts/PerformanceTrendChart'
 import { DealsList } from '@/components/deals/DealsList'
 import { PeriodSelector } from '@/components/filters/PeriodSelector'
 import { ManagerSelector } from '@/components/filters/ManagerSelector'
 import { RightPanelControls } from '@/components/dashboard/RightPanelControls'
-import { useDashboardData } from '@/hooks/useDashboardData'
-import type { DashboardContentProps } from '@/components/dashboard/types'
+import { useDashboardData, type DashboardEmployee } from '@/hooks/useDashboardData'
+import type { DashboardContentProps, DateRange } from '@/components/dashboard/types'
+import type { PeriodPreset } from '@/components/filters/PeriodSelector'
+import type { DealCard } from '@/components/deals/DealsList'
+import dynamic from 'next/dynamic'
+import { SkeletonChart } from '@/components/ui/SkeletonChart'
+import { SkeletonCard } from '@/components/ui/SkeletonCard'
+import { SkeletonTable } from '@/components/ui/SkeletonTable'
 
 const container = {
   hidden: { opacity: 0 },
@@ -30,36 +35,116 @@ const item = {
   show: { opacity: 1, y: 0 }
 }
 
+const PerformanceTrendChart = dynamic(
+  () =>
+    import('@/components/charts/PerformanceTrendChart').then((mod) => ({
+      default: mod.PerformanceTrendChart,
+    })),
+  {
+    loading: () => <SkeletonChart height={240} />,
+    ssr: false,
+  }
+)
+
+const ConversionPieChart = dynamic(
+  () =>
+    import('@/components/charts/ConversionPieChart').then((mod) => ({
+      default: mod.ConversionPieChart,
+    })),
+  {
+    loading: () => <SkeletonChart height={200} />,
+    ssr: false,
+  }
+)
+
+const EmployeeComparisonChart = dynamic(
+  () =>
+    import('@/components/charts/EmployeeComparisonChart').then((mod) => ({
+      default: mod.EmployeeComparisonChart,
+    })),
+  {
+    loading: () => <SkeletonChart height={300} />,
+    ssr: false,
+  }
+)
+
+const TeamSalesChart = dynamic(
+  () =>
+    import('@/components/charts/TeamSalesChart').then((mod) => ({
+      default: mod.TeamSalesChart,
+    })),
+  {
+    loading: () => <SkeletonChart height={250} />,
+    ssr: false,
+  }
+)
+
+const WeeklyActivityChart = dynamic(
+  () =>
+    import('@/components/charts/WeeklyActivityChart').then((mod) => ({
+      default: mod.WeeklyActivityChart,
+    })),
+  {
+    loading: () => <SkeletonChart height={200} />,
+    ssr: false,
+  }
+)
+
 export function DashboardContent({ user }: DashboardContentProps) {
   const router = useRouter()
   const headerRef = useRef<HTMLDivElement>(null)
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const isManager = user.role === 'MANAGER' || user.role === 'ADMIN'
 
-  const {
-    isInitialLoading,
-    motivationLoading,
-    dealsLoading,
-    managerStats,
-    teamFunnel,
-    trendData,
-    alerts,
-    teamStats,
-    northStarKpi,
-    rawEmployees,
-    motivationData,
-    deals,
-    settings,
-    managerSparklines,
-    motivationError,
-    dealsError,
-    selectedManagerId,
-    datePreset,
-    dateRange,
-    setSelectedManagerId,
-    handleDatePresetChange,
-    handleToggleFocus,
-    refreshMotivation,
-  } = useDashboardData({ user })
+  const [selectedManagerId, setSelectedManagerId] = useState<string>('all')
+  const [datePreset, setDatePreset] = useState<PeriodPreset>('thisMonth')
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const now = new Date()
+    return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }
+  })
+  const [page, setPage] = useState(1)
+  const [employees, setEmployees] = useState<DashboardEmployee[]>([])
+  const [managerOptions, setManagerOptions] = useState<DashboardEmployee[]>([])
+  const [deals, setDeals] = useState<DealCard[]>([])
+  const [dealsError, setDealsError] = useState<string | null>(null)
+
+  const filters = useMemo(
+    () => ({
+      managerId: selectedManagerId === 'all' ? undefined : selectedManagerId,
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      page,
+      limit: 50,
+    }),
+    [selectedManagerId, dateRange.start, dateRange.end, page]
+  )
+
+  const { data, isLoading, isFetching, isError, error, refetch } = useDashboardData(filters, { enabled: isManager })
+
+  const handleDatePresetChange = useCallback((preset: PeriodPreset, nextRange?: DateRange) => {
+    setDatePreset(preset)
+    if (nextRange) {
+      setDateRange(nextRange)
+    }
+  }, [])
+
+  useEffect(() => {
+    setPage(1)
+  }, [selectedManagerId, dateRange.start, dateRange.end])
+
+  useEffect(() => {
+    if (!data?.employees) return
+    setEmployees((prev) => (page === 1 ? data.employees : [...prev, ...data.employees]))
+    if (selectedManagerId === 'all') {
+      setManagerOptions((prev) => (page === 1 ? data.employees : [...prev, ...data.employees]))
+    }
+  }, [data?.employees, page, selectedManagerId])
+
+  useEffect(() => {
+    if (data?.deals) {
+      setDeals(data.deals)
+    }
+  }, [data?.deals])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -70,26 +155,118 @@ export function DashboardContent({ user }: DashboardContentProps) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const selectedManager = selectedManagerId !== 'all'
-    ? rawEmployees.find((emp) => emp.id === selectedManagerId)
-    : null
+  const handleReportClick = useCallback(() => {
+    router.push('/dashboard/report')
+  }, [router])
 
-  const motivationTitle =
-    selectedManagerId === 'all'
-      ? 'Доход команды (Прогноз)'
-      : selectedManager
-        ? `Доход менеджера ${selectedManager.name}`
-        : 'Мой доход (Прогноз)'
+  const errorMessage =
+    isError && error instanceof Error ? error.message : isError ? 'Ошибка загрузки данных' : null
+  const pulseError = errorMessage
+  const handlePulseRetry = useCallback(() => {
+    refetch()
+  }, [refetch])
 
-  if (isInitialLoading) {
+  const managerList = managerOptions.length > 0 ? managerOptions : employees
+  const teamStats = data?.teamStats ?? null
+  const teamFunnel = data?.teamFunnel ?? []
+  const trendData = data?.trendData ?? []
+  const weeklyActivityData = data?.weeklyActivityData ?? []
+  const redZoneAlerts = data?.redZoneAlerts ?? []
+  const motivationData = data?.motivationData ?? null
+  const northStarKpi = data?.northStarKpi ?? null
+  const employeesPagination = data?.pagination ?? null
+  const employeesLoading = isFetching
+  const dealsLoading = isFetching && deals.length === 0
+
+  const conversionPieData = useMemo(
+    () => teamFunnel.map((stage) => ({ name: stage.label, value: stage.value })),
+    [teamFunnel]
+  )
+
+  const employeeComparisonData = useMemo(() => {
+    if (employees.length === 0) return []
+    const sorted = [...employees].sort(
+      (a, b) => b.metrics.monthlySalesAmount - a.metrics.monthlySalesAmount
+    )
+    return sorted.slice(0, 5).map((employee) => ({
+      name: employee.name.split(' ')[0] || employee.name,
+      deals: employee.metrics.successfulDeals,
+      sales: employee.metrics.monthlySalesAmount,
+    }))
+  }, [employees])
+
+  const loadMoreEmployees = useCallback(() => {
+    if (!employeesPagination?.hasMore || employeesLoading) return
+    setPage((prev) => prev + 1)
+  }, [employeesPagination?.hasMore, employeesLoading])
+
+  const handleToggleFocus = useCallback(async (dealId: string, nextValue: boolean) => {
+    setDealsError(null)
+    setDeals((prev) =>
+      prev.map((deal) => (deal.id === dealId ? { ...deal, isFocus: nextValue } : deal))
+    )
+
+    try {
+      const response = await fetch(`/api/deals/${dealId}/focus`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isFocus: nextValue }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Не удалось обновить фокус')
+      }
+
+      refetch()
+    } catch (error) {
+      setDeals((prev) =>
+        prev.map((deal) => (deal.id === dealId ? { ...deal, isFocus: !nextValue } : deal))
+      )
+      setDealsError(error instanceof Error ? error.message : 'Ошибка обновления сделки')
+    }
+  }, [refetch])
+
+  const fallbackTeamStats = {
+    zoomBooked: 0,
+    zoom1Held: 0,
+    zoom2Held: 0,
+    contractReview: 0,
+    pushCount: 0,
+    successfulDeals: 0,
+    salesAmount: 0,
+    planSales: 0,
+    planDeals: 0,
+    refusals: 0,
+    warming: 0,
+    bookedToZoom1: 0,
+    zoom1ToZoom2: 0,
+    zoom2ToContract: 0,
+    contractToPush: 0,
+    pushToDeal: 0,
+    northStar: 0,
+    totalConversion: 0,
+    activityScore: 0,
+    trend: 'flat' as const,
+  }
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
+      <div className="space-y-8 pb-96">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <SkeletonCard key={index} lines={3} className="min-h-[160px]" />
+          ))}
+        </div>
+        <SkeletonCard lines={3} className="min-h-[120px]" />
+        <SkeletonChart height={240} />
+        <SkeletonTable rows={6} columns={4} />
+        <SkeletonTable rows={4} columns={3} />
+        <SkeletonChart height={300} />
       </div>
     )
   }
 
-  if (user.role !== 'MANAGER') {
+  if (!isManager) {
     return (
       <div className="glass-card p-8">
         <h2 className="text-2xl font-bold mb-2 text-[var(--foreground)]">Заполните дневной отчёт</h2>
@@ -97,8 +274,8 @@ export function DashboardContent({ user }: DashboardContentProps) {
           Для сотрудников доступен личный кабинет отчётов. Данные автоматически попадут в аналитику.
         </p>
         <button
-          onClick={() => router.push('/dashboard/report')}
-          className="px-4 py-2 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors"
+          onClick={handleReportClick}
+          className="px-4 py-2 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] transition-colors"
         >
           Открыть форму отчёта
         </button>
@@ -133,7 +310,7 @@ export function DashboardContent({ user }: DashboardContentProps) {
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
             <div className="w-full sm:w-auto">
               <ManagerSelector
-                managers={rawEmployees}
+                managers={managerList}
                 selectedManagerId={selectedManagerId}
                 onSelectManager={setSelectedManagerId}
                 title="Сотрудник"
@@ -143,7 +320,7 @@ export function DashboardContent({ user }: DashboardContentProps) {
               <PeriodSelector
                 selectedPreset={datePreset}
                 range={dateRange}
-                onPresetChange={(preset, next) => handleDatePresetChange(preset, next)}
+                onPresetChange={handleDatePresetChange}
                 title="Период"
               />
             </div>
@@ -164,28 +341,36 @@ export function DashboardContent({ user }: DashboardContentProps) {
       </div>
 
       {/* L1: Pulse Grid (Plan/Fact + KPI + Forecast) */}
-      {teamStats && (
+      {teamStats || pulseError ? (
         <PulseGrid
           stats={{
-            ...teamStats,
-            prevConversion: teamStats.totalConversion,
+            ...(teamStats ?? fallbackTeamStats),
+            prevConversion: (teamStats ?? fallbackTeamStats).totalConversion,
           }}
           northStarKpi={northStarKpi}
           trendData={trendData}
           forecastSales={motivationData?.totalPotentialTurnover ?? 0}
+          errorMessage={pulseError}
+          onRetry={pulseError ? handlePulseRetry : undefined}
         />
-      )}
+      ) : employeesLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <SkeletonCard key={index} lines={3} className="min-h-[160px]" />
+          ))}
+        </div>
+      ) : null}
 
       {/* L2: Management by Exception (Alerts) */}
       <AnimatePresence mode="popLayout">
-        {alerts.length > 0 && (
+        {redZoneAlerts.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             layout
           >
-            <RedZoneAlerts alerts={alerts} />
+            <RedZoneAlerts alerts={redZoneAlerts} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -193,33 +378,110 @@ export function DashboardContent({ user }: DashboardContentProps) {
       {/* L4: Team Funnel */}
       <motion.div variants={item} className="glass-card p-6">
         <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Воронка отдела</h2>
-        <FunnelChart data={teamFunnel} />
+        {employeesLoading && teamFunnel.length === 0 ? (
+          <SkeletonChart height={200} className="border-0 bg-transparent p-0" />
+        ) : (
+          <FunnelChart
+            data={teamFunnel}
+            error={errorMessage}
+            onRetry={errorMessage ? handlePulseRetry : undefined}
+          />
+        )}
       </motion.div>
 
       {/* L5: Managers Table */}
       <motion.div variants={item} className="glass-card p-6">
         <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Эффективность менеджеров</h2>
-        <ManagersTable
-          managers={managerStats}
-          benchmarks={settings?.conversionBenchmarks}
-          activityTarget={settings?.activityTarget}
-          sparklines={managerSparklines}
-        />
+        {employeesLoading && employees.length === 0 ? (
+          <SkeletonTable rows={6} columns={4} className="border-0 bg-transparent" />
+        ) : (
+          <ManagersTable
+            employees={employees}
+            selectedId={selectedManagerId === 'all' ? undefined : selectedManagerId}
+            onSelectEmployee={setSelectedManagerId}
+            benchmarks={data?.settings?.conversionBenchmarks}
+            error={errorMessage}
+            onRetry={errorMessage ? handlePulseRetry : undefined}
+          />
+        )}
+        {selectedManagerId === 'all' && employeesPagination && employeesPagination.total > employees.length && (
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-[var(--muted-foreground)]">
+            <span>
+              Показано {employees.length} из {employeesPagination.total} сотрудников
+            </span>
+            <button
+              type="button"
+              onClick={loadMoreEmployees}
+              disabled={!employeesPagination.hasMore || employeesLoading}
+              className="inline-flex items-center justify-center rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] transition hover:bg-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {employeesLoading ? 'Загрузка...' : employeesPagination.hasMore ? 'Показать ещё' : 'Все сотрудники загружены'}
+            </button>
+          </div>
+        )}
       </motion.div>
 
-      {/* L6: Focus Deals */}
+      {/* L6: Conversion + Comparison */}
+      <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Конверсия по этапам</h2>
+          {employeesLoading && conversionPieData.length === 0 ? (
+            <SkeletonChart height={220} className="border-0 bg-transparent p-0" />
+          ) : (
+            <div className="h-[240px]">
+              <ConversionPieChart data={conversionPieData} />
+            </div>
+          )}
+        </div>
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Сравнение менеджеров</h2>
+          {employeesLoading && employeeComparisonData.length === 0 ? (
+            <SkeletonChart height={260} className="border-0 bg-transparent p-0" />
+          ) : (
+            <div className="h-[300px]">
+              <EmployeeComparisonChart data={employeeComparisonData} />
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* L7: Team Sales + Weekly Activity */}
+      <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Продажи команды</h2>
+          {employeesLoading && trendData.length === 0 ? (
+            <SkeletonChart height={240} className="border-0 bg-transparent p-0" />
+          ) : (
+            <div className="h-[260px]">
+              <TeamSalesChart data={trendData} />
+            </div>
+          )}
+        </div>
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">Активность за неделю</h2>
+          {employeesLoading && weeklyActivityData.length === 0 ? (
+            <SkeletonChart height={220} className="border-0 bg-transparent p-0" />
+          ) : (
+            <div className="h-[240px]">
+              <WeeklyActivityChart data={weeklyActivityData} />
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* L8: Focus Deals */}
       <motion.div variants={item}>
         <DealsList
           deals={deals}
           loading={dealsLoading}
-          error={dealsError}
+          error={dealsError ?? errorMessage}
           onToggleFocus={handleToggleFocus}
         />
       </motion.div>
 
-      {/* L7: Trend Chart */}
+      {/* L9: Trend Chart */}
       <AnimatePresence mode="popLayout">
-        {trendData.length > 0 && (
+        {trendData.length > 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -230,7 +492,17 @@ export function DashboardContent({ user }: DashboardContentProps) {
             <h2 className="text-xl font-bold text-[var(--foreground)] mb-6">Динамика показателей</h2>
             <PerformanceTrendChart data={trendData} className="h-[300px]" />
           </motion.div>
-        )}
+        ) : employeesLoading ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            layout
+            className="glass-card p-8"
+          >
+            <SkeletonChart height={300} className="border-0 bg-transparent p-0" />
+          </motion.div>
+        ) : null}
       </AnimatePresence>
 
       {/* Side Controls */}
@@ -238,8 +510,8 @@ export function DashboardContent({ user }: DashboardContentProps) {
         isVisible={!isHeaderVisible}
         selectedPreset={datePreset}
         range={dateRange}
-        onPresetChange={(preset, next) => handleDatePresetChange(preset, next)}
-        managers={rawEmployees}
+        onPresetChange={handleDatePresetChange}
+        managers={managerList}
         selectedManagerId={selectedManagerId}
         onSelectManager={setSelectedManagerId}
       />

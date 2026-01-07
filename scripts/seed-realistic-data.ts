@@ -12,8 +12,9 @@
  * Запуск: npx tsx scripts/seed-realistic-data.ts
  */
 
-import { PrismaClient } from '@prisma/client'
-import { hash } from 'bcryptjs'
+import { PrismaClient, type Prisma } from '@prisma/client'
+import { resolvePasswordHash } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -177,7 +178,7 @@ function generateDayReport(profile: typeof MANAGERS[0]['profile'], date: Date) {
     successfulDeals,
     monthlySalesAmount: Math.round(salesAmount),
     refusalsCount: totalRefusals,
-    refusalsByStage: refusalsByStage as any,
+    refusalsByStage: refusalsByStage as Prisma.InputJsonValue,
     warmingUpCount: warmingUp,
     refusalsReasons: totalRefusals > 0 ? 'не по цене, думает' : null,
   }
@@ -237,7 +238,12 @@ async function ensureManager() {
     return existingManager
   }
 
-  const password = await hash('manager123', 12)
+  const password = await resolvePasswordHash({
+    label: 'manager password',
+    envVar: 'MANAGER_PASSWORD',
+    hashEnvVar: 'MANAGER_PASSWORD_HASH',
+    saltRounds: 12,
+  })
   const manager = await prisma.user.create({
     data: {
       name: 'Руководитель',
@@ -272,7 +278,12 @@ async function main() {
     // 4. Создаём менеджеров и их отчёты
     console.log('\n👥 Создание менеджеров и отчётов:\n')
 
-    const password = await hash('password123', 12)
+    const password = await resolvePasswordHash({
+      label: 'employee password',
+      envVar: 'EMPLOYEE_PASSWORD',
+      hashEnvVar: 'EMPLOYEE_PASSWORD_HASH',
+      saltRounds: 12,
+    })
     let totalReports = 0
 
     for (const managerData of MANAGERS) {
@@ -325,15 +336,15 @@ async function main() {
     console.log('  ⚠️  ПРОБЛЕМНЫЕ (<3%): Дмитрий, Алина')
 
     console.log('\n🔐 Данные для входа:')
-    console.log('  👔 Менеджер: manager@callwork.com / manager123')
-    console.log('  👤 Сотрудники: [email из списка] / password123')
+    console.log('  👔 Менеджер: manager@callwork.com (пароль из MANAGER_PASSWORD/SEED_PASSWORD)')
+    console.log('  👤 Сотрудники: [email из списка] (пароль из EMPLOYEE_PASSWORD/SEED_PASSWORD)')
 
     console.log('\n🚀 Откройте http://localhost:3000 для проверки!')
     console.log('   → Главный дашборд: /dashboard')
     console.log('   → Детальная воронка: /dashboard/analytics/funnel')
 
   } catch (error) {
-    console.error('\n❌ ОШИБКА:', error)
+    logError('Ошибка', error)
     throw error
   } finally {
     await prisma.$disconnect()
@@ -342,7 +353,7 @@ async function main() {
 
 // Запуск
 main()
-  .catch(err => {
-    console.error(err)
+  .catch((err) => {
+    logError(err)
     process.exit(1)
   })

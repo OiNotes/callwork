@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastActivity } from '../../sse/activities/route'
 import crypto from 'crypto'
+import type { Prisma } from '@prisma/client'
+import { RopSettingsService } from '@/lib/services/RopSettingsService'
+import { logError } from '@/lib/logger'
 
 /**
  * Timing-safe сравнение Bearer token для защиты от timing attacks
@@ -21,198 +24,216 @@ function verifyBearerToken(authHeader: string | null, secret: string | undefined
   return crypto.timingSafeEqual(providedBuffer, expectedBuffer)
 }
 
+type AlertCandidate = Prisma.AlertCreateManyInput & { alertKey: string }
+
 export async function GET(request: NextRequest) {
-  // Проверка авторизации с timing-safe сравнением
-  if (!verifyBearerToken(request.headers.get('authorization'), process.env.CRON_SECRET)) {
+  const cronSecret = process.env.CRON_SECRET
+
+  if (!cronSecret) {
+    logError('CRON_SECRET environment variable is not configured')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+
+  if (!verifyBearerToken(request.headers.get('authorization'), cronSecret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
-    const alerts: any[] = []
     const today = new Date()
+    const settings = await RopSettingsService.getEffectiveSettings(null)
+    const noReportDays = Math.max(0, settings.alertNoReportDays)
+    const noDealsDays = Math.max(0, settings.alertNoDealsDays)
+    const conversionDropPercent = Math.max(0, settings.alertConversionDrop)
 
-    // 1. Проверить сотрудников без отчётов (2+ дня)
-    const twoDaysAgo = new Date(today)
-    twoDaysAgo.setDate(today.getDate() - 2)
-    twoDaysAgo.setHours(0, 0, 0, 0)
-
-    const usersWithoutReports = await prisma.user.findMany({
-      where: {
-        role: 'EMPLOYEE',
-        isActive: true
-      },
-      include: {
-        reports: {
-          where: {
-            date: { gte: twoDaysAgo }
-          }
-        }
-      }
+    console.info('CRON check-alerts started', {
+      at: today.toISOString(),
+      noReportDays,
+      noDealsDays,
+      conversionDropPercent,
     })
 
-    for (const user of usersWithoutReports) {
-      if (user.reports.length === 0) {
-        // Проверить, не создавали ли уже такой алерт недавно (избежать дубликатов)
-        const existingAlert = await prisma.alert.findFirst({
-          where: {
-            userId: user.id,
-            type: 'NO_REPORTS',
-            createdAt: { gte: twoDaysAgo }
-          }
-        })
+    const candidates = new Map<string, AlertCandidate>()
+    const addCandidate = (alertKey: string, data: Omit<AlertCandidate, 'alertKey'>) => {
+      if (!candidates.has(alertKey)) {
+        candidates.set(alertKey, { ...data, alertKey })
+      }
+    }
 
-        if (!existingAlert) {
-          alerts.push({
+    const dateFilters: Date[] = []
+    let noReportSince: Date | null = null
+    let noDealsSince: Date | null = null
+    let thisWeekStart: Date | null = null
+    let lastWeekStart: Date | null = null
+    let lastWeekEnd: Date | null = null
+
+    if (noReportDays > 0) {
+      noReportSince = new Date(today)
+      noReportSince.setDate(today.getDate() - noReportDays)
+      noReportSince.setHours(0, 0, 0, 0)
+      dateFilters.push(noReportSince)
+    }
+
+    if (noDealsDays > 0) {
+      noDealsSince = new Date(today)
+      noDealsSince.setDate(today.getDate() - noDealsDays)
+      noDealsSince.setHours(0, 0, 0, 0)
+      dateFilters.push(noDealsSince)
+    }
+
+    if (conversionDropPercent > 0) {
+      thisWeekStart = new Date(today)
+      thisWeekStart.setDate(today.getDate() - today.getDay() + 1)
+      thisWeekStart.setHours(0, 0, 0, 0)
+
+      lastWeekStart = new Date(thisWeekStart)
+      lastWeekStart.setDate(thisWeekStart.getDate() - 7)
+      lastWeekEnd = new Date(thisWeekStart)
+      lastWeekEnd.setMilliseconds(-1)
+
+      dateFilters.push(lastWeekStart)
+    }
+
+    const earliestDate = dateFilters.length > 0
+      ? new Date(Math.min(...dateFilters.map((d) => d.getTime())))
+      : null
+
+    const users = earliestDate
+      ? await prisma.user.findMany({
+          where: {
+            role: 'EMPLOYEE',
+            isActive: true,
+          },
+          include: {
+            reports: {
+              where: {
+                date: { gte: earliestDate },
+              },
+            },
+          },
+        })
+      : []
+
+    if (noReportSince) {
+      for (const user of users) {
+        const recentReports = user.reports.filter((report) => report.date >= noReportSince!)
+        if (recentReports.length === 0) {
+          const alertKey = `no_reports:${user.id}`
+          addCandidate(alertKey, {
             type: 'NO_REPORTS',
             severity: 'WARNING',
-            title: 'Нет отчётов 2+ дня',
-            description: `${user.name} не сдал отчёт за последние 2 дня`,
-            userId: user.id
+            title: `Нет отчётов ${noReportDays}+ дня`,
+            description: `${user.name} не сдал отчёт за последние ${noReportDays} дня`,
+            userId: user.id,
           })
         }
       }
     }
 
-    // 2. Проверить сотрудников без сделок (5+ дней)
-    const fiveDaysAgo = new Date(today)
-    fiveDaysAgo.setDate(today.getDate() - 5)
-    fiveDaysAgo.setHours(0, 0, 0, 0)
-
-    const usersWithoutDeals = await prisma.user.findMany({
-      where: {
-        role: 'EMPLOYEE',
-        isActive: true
-      },
-      include: {
-        reports: {
-          where: {
-            date: { gte: fiveDaysAgo }
-          }
-        }
-      }
-    })
-
-    for (const user of usersWithoutDeals) {
-      const hasDeals = user.reports.some(r => r.successfulDeals > 0)
-
-      if (!hasDeals && user.reports.length > 0) {
-        const existingAlert = await prisma.alert.findFirst({
-          where: {
-            userId: user.id,
-            type: 'NO_DEALS',
-            createdAt: { gte: fiveDaysAgo }
-          }
-        })
-
-        if (!existingAlert) {
-          alerts.push({
+    if (noDealsSince) {
+      for (const user of users) {
+        const recentReports = user.reports.filter((report) => report.date >= noDealsSince!)
+        const hasDeals = recentReports.some((report) => report.successfulDeals > 0)
+        if (!hasDeals && recentReports.length > 0) {
+          const alertKey = `no_deals:${user.id}`
+          addCandidate(alertKey, {
             type: 'NO_DEALS',
             severity: 'CRITICAL',
-            title: 'Нет закрытых сделок 5+ дней',
-            description: `${user.name} не закрыл ни одной сделки за последние 5 дней`,
-            userId: user.id
+            title: `Нет закрытых сделок ${noDealsDays}+ дней`,
+            description: `${user.name} не закрыл ни одной сделки за последние ${noDealsDays} дней`,
+            userId: user.id,
           })
         }
       }
     }
 
-    // 3. Проверить упавшую конверсию (текущая неделя vs прошлая)
-    const thisWeekStart = new Date(today)
-    thisWeekStart.setDate(today.getDate() - today.getDay() + 1) // Понедельник
-    thisWeekStart.setHours(0, 0, 0, 0)
+    if (conversionDropPercent > 0 && thisWeekStart && lastWeekStart && lastWeekEnd) {
+      const dropMultiplier = Math.max(0, 1 - conversionDropPercent / 100)
 
-    const lastWeekStart = new Date(thisWeekStart)
-    lastWeekStart.setDate(thisWeekStart.getDate() - 7)
-    const lastWeekEnd = new Date(thisWeekStart)
-    lastWeekEnd.setMilliseconds(-1)
+      for (const user of users) {
+        const thisWeekReports = user.reports.filter((report) => report.date >= thisWeekStart)
+        const lastWeekReports = user.reports.filter(
+          (report) => report.date >= lastWeekStart && report.date <= lastWeekEnd
+        )
 
-    const users = await prisma.user.findMany({
-      where: {
-        role: 'EMPLOYEE',
-        isActive: true
-      },
-      include: {
-        reports: {
-          where: {
-            OR: [
-              { date: { gte: thisWeekStart } },
-              { date: { gte: lastWeekStart, lte: lastWeekEnd } }
-            ]
-          }
-        }
-      }
-    })
+        if (thisWeekReports.length > 0 && lastWeekReports.length > 0) {
+          const thisWeekDeals = thisWeekReports.reduce((sum, report) => sum + report.successfulDeals, 0)
+          const thisWeekVzm = thisWeekReports.reduce((sum, report) => sum + report.vzmConducted, 0)
+          const thisWeekConversion = thisWeekVzm > 0 ? (thisWeekDeals / thisWeekVzm) * 100 : 0
 
-    for (const user of users) {
-      const thisWeekReports = user.reports.filter(r => r.date >= thisWeekStart)
-      const lastWeekReports = user.reports.filter(
-        r => r.date >= lastWeekStart && r.date <= lastWeekEnd
-      )
+          const lastWeekDeals = lastWeekReports.reduce((sum, report) => sum + report.successfulDeals, 0)
+          const lastWeekVzm = lastWeekReports.reduce((sum, report) => sum + report.vzmConducted, 0)
+          const lastWeekConversion = lastWeekVzm > 0 ? (lastWeekDeals / lastWeekVzm) * 100 : 0
 
-      if (thisWeekReports.length > 0 && lastWeekReports.length > 0) {
-        const thisWeekDeals = thisWeekReports.reduce((sum, r) => sum + r.successfulDeals, 0)
-        const thisWeekVzm = thisWeekReports.reduce((sum, r) => sum + r.vzmConducted, 0)
-        const thisWeekConversion = thisWeekVzm > 0 ? (thisWeekDeals / thisWeekVzm) * 100 : 0
-
-        const lastWeekDeals = lastWeekReports.reduce((sum, r) => sum + r.successfulDeals, 0)
-        const lastWeekVzm = lastWeekReports.reduce((sum, r) => sum + r.vzmConducted, 0)
-        const lastWeekConversion = lastWeekVzm > 0 ? (lastWeekDeals / lastWeekVzm) * 100 : 0
-
-        // Если конверсия упала больше чем на 20%
-        if (lastWeekConversion > 0 && thisWeekConversion < lastWeekConversion * 0.8) {
-          const existingAlert = await prisma.alert.findFirst({
-            where: {
-              userId: user.id,
-              type: 'LOW_CONVERSION',
-              createdAt: { gte: thisWeekStart }
-            }
-          })
-
-          if (!existingAlert) {
-            alerts.push({
+          if (lastWeekConversion > 0 && thisWeekConversion < lastWeekConversion * dropMultiplier) {
+            const alertKey = `low_conversion:${user.id}:${thisWeekStart.toISOString().slice(0, 10)}`
+            addCandidate(alertKey, {
               type: 'LOW_CONVERSION',
               severity: 'WARNING',
               title: 'Упала конверсия',
               description: `Конверсия ${user.name} упала с ${lastWeekConversion.toFixed(1)}% до ${thisWeekConversion.toFixed(1)}%`,
-              userId: user.id
+              userId: user.id,
             })
           }
         }
       }
     }
 
-    // Сохранить новые алерты
-    if (alerts.length > 0) {
-      await prisma.alert.createMany({ data: alerts })
+    const candidateAlerts = Array.from(candidates.values())
+    const existingKeys = candidateAlerts.length
+      ? await prisma.alert.findMany({
+          where: {
+            alertKey: { in: candidateAlerts.map((alert) => alert.alertKey) },
+            isRead: false,
+          },
+          select: { alertKey: true },
+        })
+      : []
 
-      // Broadcast критичных алертов в real-time
-      for (const alert of alerts) {
-        if (alert.severity === 'CRITICAL') {
-          const user = await prisma.user.findUnique({
-            where: { id: alert.userId },
-            select: { name: true }
-          })
+    const existingKeySet = new Set(existingKeys.map((alert) => alert.alertKey).filter(Boolean))
+    const newAlerts = candidateAlerts.filter((alert) => !existingKeySet.has(alert.alertKey))
 
-          if (user) {
+    if (newAlerts.length > 0) {
+      await prisma.alert.createMany({ data: newAlerts })
+
+      const criticalAlerts = newAlerts.filter((alert) => alert.severity === 'CRITICAL')
+      if (criticalAlerts.length > 0) {
+        const criticalUserIds = criticalAlerts
+          .map((alert) => alert.userId)
+          .filter((userId): userId is string => Boolean(userId))
+
+        const criticalUsers = await prisma.user.findMany({
+          where: { id: { in: criticalUserIds }, isActive: true },
+          select: { id: true, name: true },
+        })
+        const nameById = new Map(criticalUsers.map((user) => [user.id, user.name]))
+
+        for (const alert of criticalAlerts) {
+          const userName = alert.userId ? nameById.get(alert.userId) : null
+          if (userName && alert.userId) {
             broadcastActivity({
               type: 'alert',
               message: alert.title,
-              details: alert.description,
+              details: alert.description ?? '',
               userId: alert.userId,
-              userName: user.name
+              userName,
             })
           }
         }
       }
     }
 
-    return NextResponse.json({
-      created: alerts.length,
-      alerts: alerts.map(a => ({ type: a.type, userId: a.userId }))
+    console.info('CRON check-alerts completed', {
+      created: newAlerts.length,
+      skipped: existingKeySet.size,
+      candidates: candidateAlerts.length,
     })
 
+    return NextResponse.json({
+      created: newAlerts.length,
+      alerts: newAlerts.map((alert) => ({ type: alert.type, userId: alert.userId, alertKey: alert.alertKey })),
+    })
   } catch (error) {
-    console.error('Cron check-alerts error:', error)
+    logError('Cron check-alerts error', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

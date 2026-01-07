@@ -1,5 +1,6 @@
 
 import { prisma } from '../lib/prisma'
+import { logError } from '../lib/logger'
 
 async function checkData() {
   const reports = await prisma.report.findMany()
@@ -16,5 +17,5 @@ async function checkData() {
 }
 
 checkData()
-  .catch(e => console.error(e))
+  .catch((error) => logError(error))
   .finally(() => prisma.$disconnect())

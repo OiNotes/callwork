@@ -1,9 +1,9 @@
 'use client'
 
 import { ForecastTabs } from '@/components/forecast/ForecastTabs'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 
 export default function ForecastLayout({
@@ -19,11 +19,12 @@ export default function ForecastLayout({
           
           {/* Title & Back */}
           <div className="flex items-center gap-4">
-            <Link 
+            <Link
               href="/dashboard"
-              className="p-2 bg-[var(--secondary)]/50 hover:bg-[var(--secondary)] rounded-xl transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              className="inline-flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Назад</span>
             </Link>
             <div>
               <h1 className="text-xl font-bold text-[var(--foreground)] tracking-tight">

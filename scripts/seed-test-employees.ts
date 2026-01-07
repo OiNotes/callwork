@@ -6,8 +6,9 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { resolvePasswordHash } from './utils/password'
 import { subDays, startOfDay } from 'date-fns'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -17,31 +18,26 @@ const EMPLOYEES = [
     email: 'ivanov@callwork.com',
     name: 'Иван Иванов',
     monthlyGoal: 1800000, // 1.8 млн
-    password: 'password123'
   },
   {
     email: 'petrova@callwork.com',
     name: 'Мария Петрова',
     monthlyGoal: 2200000, // 2.2 млн
-    password: 'password123'
   },
   {
     email: 'sidorov@callwork.com',
     name: 'Алексей Сидоров',
     monthlyGoal: 1500000, // 1.5 млн
-    password: 'password123'
   },
   {
     email: 'kuznetsova@callwork.com',
     name: 'Елена Кузнецова',
     monthlyGoal: 2000000, // 2 млн
-    password: 'password123'
   },
   {
     email: 'smirnov@callwork.com',
     name: 'Дмитрий Смирнов',
     monthlyGoal: 2500000, // 2.5 млн
-    password: 'password123'
   }
 ]
 
@@ -116,7 +112,7 @@ async function seedTestEmployees() {
     })
 
     if (!manager) {
-      console.error('❌ Руководитель не найден! Сначала запустите: npm run db:create-manager')
+      logError('Руководитель не найден. Сначала запустите: npm run db:create-manager')
       process.exit(1)
     }
 
@@ -124,7 +120,7 @@ async function seedTestEmployees() {
 
     // 2. Создать сотрудников
     console.log('\n2️⃣  Создание сотрудников...')
-    const hashedPassword = await bcrypt.hash('password123', 10)
+    const hashedPassword = await resolvePasswordHash({ label: 'seed password' })
     const createdEmployees = []
 
     for (const emp of EMPLOYEES) {
@@ -205,7 +201,7 @@ async function seedTestEmployees() {
     console.log(`📊 Отчётов создано: ${totalReports}`)
     console.log(`\n📋 Учётные данные для входа:`)
     console.log(`   Email: {имя}@callwork.com`)
-    console.log(`   Password: password123\n`)
+    console.log(`   Password: (set via SEED_PASSWORD)\n`)
     console.log(`📌 Все сотрудники привязаны к руководителю: ${manager.name}\n`)
 
     // Статистика по целям
@@ -218,7 +214,7 @@ async function seedTestEmployees() {
     console.log(`💰 План отдела (сумма): ${(totalEmployeeGoals + Number(manager.monthlyGoal || 0)).toLocaleString()} ₽\n`)
 
   } catch (error) {
-    console.error('\n❌ Ошибка при создании данных:', error)
+    logError('Ошибка при создании данных', error)
     throw error
   }
 }
@@ -228,8 +224,8 @@ async function main() {
 }
 
 main()
-  .catch(error => {
-    console.error('\n💥 КРИТИЧЕСКАЯ ОШИБКА:', error)
+  .catch((error) => {
+    logError('Критическая ошибка', error)
     process.exit(1)
   })
   .finally(async () => {

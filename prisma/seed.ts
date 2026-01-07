@@ -1,11 +1,12 @@
 import { PrismaClient, Role, DealStatus, PaymentStatus } from '@prisma/client'
-import bcrypt from 'bcryptjs'
 import { MOTIVATION_GRADE_PRESETS } from '../lib/config/motivationGrades'
+import { resolvePasswordHash } from '../scripts/utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  const hashedPassword = await bcrypt.hash('password123', 10)
+  const hashedPassword = await resolvePasswordHash({ label: 'seed password' })
   
   const manager = await prisma.user.upsert({
     where: { email: 'manager@callwork.com' },
@@ -86,7 +87,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e)
+    logError(e)
     process.exit(1)
   })
   .finally(async () => {

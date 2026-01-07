@@ -1,11 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { Save, RefreshCw, Plus, Trash2, DollarSign, Filter, Target, Briefcase, Loader2 } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { ArrowLeft, Save, RefreshCw, Plus, Trash2, DollarSign, Filter, Target, Briefcase, Loader2, AlertTriangle, MessageCircle } from 'lucide-react'
+import Link from 'next/link'
 import { toast } from 'sonner'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from '@/lib/motion'
 import * as Tabs from '@radix-ui/react-tabs'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import Decimal from 'decimal.js'
+import { roundMoney, sumDecimals, toNumber } from '@/lib/utils/decimal'
+import { logError } from '@/lib/logger'
 
 type ConversionBenchmarks = {
   BOOKED_TO_ZOOM1: number | null
@@ -24,6 +28,11 @@ interface EffectiveSettings {
   departmentGoal: number | null
   conversionBenchmarks: ConversionBenchmarks
   alertThresholds: AlertThresholds
+  alertNoReportDays: number | null
+  alertNoDealsDays: number | null
+  alertConversionDrop: number | null
+  telegramRegistrationTtl: number | null
+  telegramReportTtl: number | null
   activityScoreTarget: number | null
   northStarTarget: number | null
   salesPerDeal: number | null
@@ -64,15 +73,16 @@ export default function RopSettingsPage() {
         if (!res.ok) throw new Error('Не удалось загрузить настройки')
         const json = await res.json()
         setSettings(json.settings)
+        const managers = Array.isArray(json.managers) ? (json.managers as ManagerPlan[]) : []
         setManagerPlans(
-          (json.managers || []).map((m: any) => ({
+          managers.map((m) => ({
             id: m.id,
             name: m.name,
-            monthlyGoal: m.monthlyGoal ? Number(m.monthlyGoal) : null,
+            monthlyGoal: typeof m.monthlyGoal === 'number' ? m.monthlyGoal : null,
           }))
         )
       } catch (error) {
-        console.error(error)
+        logError('Failed to fetch ROP settings', error)
         toast.error('Не удалось загрузить настройки')
       } finally {
         setLoading(false)
@@ -86,9 +96,13 @@ export default function RopSettingsPage() {
     const trimmed = value.trim()
     if (trimmed === '') return null
     const normalized = trimmed.replace(',', '.')
-    const num = Number(normalized)
-    if (!Number.isFinite(num)) return null
-    return num
+    try {
+      const decimal = new Decimal(normalized)
+      if (!decimal.isFinite()) return null
+      return decimal.toNumber()
+    } catch {
+      return null
+    }
   }
 
   const handleBenchmarkChange = (key: keyof ConversionBenchmarks, value: string) => {
@@ -154,7 +168,7 @@ export default function RopSettingsPage() {
       setSettings(json.settings)
       toast.success('Настройки успешно применены')
     } catch (error) {
-      console.error(error)
+      logError('Failed to update ROP settings', error)
       toast.error('Ошибка сохранения')
     } finally {
       setSaving(false)
@@ -180,24 +194,40 @@ export default function RopSettingsPage() {
     setSettings({ ...settings, motivationGrades: next })
   }
 
-  const addGradeRow = () => {
-    if (!settings) return
-    setSettings({
-      ...settings,
-      motivationGrades: [
-        ...settings.motivationGrades,
-        { minTurnover: 0, maxTurnover: null, commissionRate: 0 },
-      ],
+  const addGradeRow = useCallback(() => {
+    setSettings((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        motivationGrades: [
+          ...prev.motivationGrades,
+          { minTurnover: 0, maxTurnover: null, commissionRate: 0 },
+        ],
+      }
     })
-  }
+  }, [])
 
-  const removeGradeRow = (index: number) => {
-    if (!settings) return
-    setSettings({
-      ...settings,
-      motivationGrades: settings.motivationGrades.filter((_, idx) => idx !== index),
+  const removeGradeRow = useCallback((index: number) => {
+    setSettings((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        motivationGrades: prev.motivationGrades.filter((_, idx) => idx !== index),
+      }
     })
-  }
+  }, [])
+
+  const handleReload = useCallback(() => {
+    window.location.reload()
+  }, [])
+
+  const handleRemoveGradeClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const indexValue = event.currentTarget.dataset.gradeIndex
+    if (!indexValue) return
+    const index = Number(indexValue)
+    if (Number.isNaN(index)) return
+    removeGradeRow(index)
+  }, [removeGradeRow])
 
   if (loading || !settings) {
     return (
@@ -239,11 +269,21 @@ export default function RopSettingsPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
+              className="flex flex-col gap-2"
             >
-              <h1 className="text-lg font-semibold text-[var(--foreground)]">Настройки РОПа</h1>
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                Управление планами и мотивацией
-              </p>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm font-medium">Назад</span>
+              </Link>
+              <div>
+                <h1 className="text-lg font-semibold text-[var(--foreground)]">Настройки РОПа</h1>
+                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                  Управление планами и мотивацией
+                </p>
+              </div>
             </motion.div>
 
             <motion.div
@@ -253,7 +293,7 @@ export default function RopSettingsPage() {
               className="flex gap-3"
             >
               <button
-                onClick={() => location.reload()}
+                onClick={handleReload}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--border)] text-[var(--foreground)] bg-[var(--card)] hover:bg-[var(--secondary)] transition-all duration-200 text-sm font-medium shadow-sm"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -365,7 +405,9 @@ export default function RopSettingsPage() {
                         <div className="text-right hidden sm:block">
                           <div className="text-sm text-[var(--muted-foreground)]">Всего</div>
                           <div className="text-xl font-bold text-[var(--primary)]">
-                            {numberFormat.format(managerPlans.reduce((s, m) => s + (m.monthlyGoal || 0), 0))} ₽
+                            {numberFormat.format(
+                              toNumber(roundMoney(sumDecimals(managerPlans.map((m) => m.monthlyGoal || 0))))
+                            )} ₽
                           </div>
                         </div>
                       </div>
@@ -547,6 +589,119 @@ export default function RopSettingsPage() {
                         </div>
                       </div>
                     </div>
+
+                    <div className="glass-card rounded-[24px] p-8 border border-[var(--border)] space-y-8">
+                      <div className="flex items-center gap-4 pb-6 border-b border-[var(--border)]">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--warning)]/10 flex items-center justify-center text-[var(--warning)]">
+                          <AlertTriangle className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold text-[var(--foreground)]">Авто-алерты</h2>
+                          <p className="text-sm text-[var(--muted-foreground)]">Триггеры для CRON оповещений</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                            Нет отчётов (дней)
+                          </label>
+                          <input
+                            type="number"
+                            onFocus={(e) => e.target.select()}
+                            className="input-premium w-full"
+                            value={settings.alertNoReportDays ?? ''}
+                            onChange={(e) =>
+                              setSettings({ ...settings, alertNoReportDays: parseNumberOrNull(e.target.value) })
+                            }
+                            min={0}
+                            max={60}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                            Нет сделок (дней)
+                          </label>
+                          <input
+                            type="number"
+                            onFocus={(e) => e.target.select()}
+                            className="input-premium w-full"
+                            value={settings.alertNoDealsDays ?? ''}
+                            onChange={(e) =>
+                              setSettings({ ...settings, alertNoDealsDays: parseNumberOrNull(e.target.value) })
+                            }
+                            min={0}
+                            max={60}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                            Падение конверсии (%)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              onFocus={(e) => e.target.select()}
+                              className="input-premium w-full"
+                              value={settings.alertConversionDrop ?? ''}
+                              onChange={(e) =>
+                                setSettings({ ...settings, alertConversionDrop: parseNumberOrNull(e.target.value) })
+                              }
+                              min={0}
+                              max={100}
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="glass-card rounded-[24px] p-8 border border-[var(--border)] space-y-8">
+                      <div className="flex items-center gap-4 pb-6 border-b border-[var(--border)]">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center text-[var(--primary)]">
+                          <MessageCircle className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold text-[var(--foreground)]">Telegram</h2>
+                          <p className="text-sm text-[var(--muted-foreground)]">Время жизни сессий бота</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                            Регистрация (мин)
+                          </label>
+                          <input
+                            type="number"
+                            onFocus={(e) => e.target.select()}
+                            className="input-premium w-full"
+                            value={settings.telegramRegistrationTtl ?? ''}
+                            onChange={(e) =>
+                              setSettings({ ...settings, telegramRegistrationTtl: parseNumberOrNull(e.target.value) })
+                            }
+                            min={1}
+                            max={180}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                            Отчёт (мин)
+                          </label>
+                          <input
+                            type="number"
+                            onFocus={(e) => e.target.select()}
+                            className="input-premium w-full"
+                            value={settings.telegramReportTtl ?? ''}
+                            onChange={(e) =>
+                              setSettings({ ...settings, telegramReportTtl: parseNumberOrNull(e.target.value) })
+                            }
+                            min={1}
+                            max={180}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </Tabs.Content>
 
@@ -565,7 +720,7 @@ export default function RopSettingsPage() {
                       </div>
                       <button
                         onClick={addGradeRow}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--primary)] hover:text-white transition-all duration-200 text-sm font-medium shadow-sm border border-[var(--border)]"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)] transition-all duration-200 text-sm font-medium shadow-sm border border-[var(--border)]"
                       >
                         <Plus className="w-4 h-4" />
                         Добавить грейд
@@ -586,7 +741,7 @@ export default function RopSettingsPage() {
                         <AnimatePresence initial={false}>
                           {settings.motivationGrades.map((grade, idx) => (
                             <motion.div
-                              key={idx}
+                              key={`${grade.minTurnover ?? 'min'}-${grade.maxTurnover ?? 'max'}-${grade.commissionRate ?? 'rate'}-${idx}`}
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
@@ -638,7 +793,8 @@ export default function RopSettingsPage() {
                               </div>
                               <div className="col-span-1 flex justify-center">
                                 <button
-                                  onClick={() => removeGradeRow(idx)}
+                                  data-grade-index={idx}
+                                  onClick={handleRemoveGradeClick}
                                   className="w-10 h-10 flex items-center justify-center rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] transition-colors"
                                   title="Удалить"
                                 >
@@ -691,7 +847,7 @@ export default function RopSettingsPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] text-white hover:shadow-lg hover:shadow-[var(--primary)]/25 hover:scale-[1.02] transition-all duration-200 font-bold text-lg disabled:opacity-70 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--primary-hover)] text-[var(--primary-foreground)] hover:shadow-lg hover:shadow-[var(--primary)]/25 hover:scale-[1.02] transition-all duration-200 font-bold text-lg disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
             Применить изменения

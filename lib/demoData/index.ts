@@ -1,4 +1,5 @@
 import { type TVData as SimulatorTVData } from '@/lib/utils/demoDataSimulator'
+import { toDecimal, toNumber } from '@/lib/utils/decimal'
 
 export interface DemoManager {
   id: string
@@ -36,7 +37,7 @@ export const DEMO_TV_DATA: SimulatorTVData = {
     calls: 210,
     appointments: 68,
     conversionRate: 15.2,
-    averageDealSize: Math.round(2_450_000 / 32),
+    averageDealSize: toNumber(toDecimal(2_450_000).dividedBy(32).toDecimalPlaces(0)),
     trends: {
       sales: 8,
       deals: 5,

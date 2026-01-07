@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -120,5 +121,5 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => logError(error))
   .finally(() => prisma.$disconnect())

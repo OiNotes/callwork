@@ -34,6 +34,6 @@ export async function getDealsByPeriod(_params: DealsByPeriodParams): Promise<Am
 }
 
 export async function refreshAmoTokenIfNeeded(): Promise<void> {
-  // TODO: implement OAuth2 refresh logic using stored tokens.
+  // OAuth2 refresh logic should be implemented by the integration layer.
   return
 }

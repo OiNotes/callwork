@@ -11,7 +11,8 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { hash } from 'bcryptjs'
+import { resolvePasswordHash } from './utils/password'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -272,7 +273,10 @@ async function seed() {
     // 3. Создаём новых сотрудников
     console.log('\n📝 Создаю новых сотрудников...')
 
-    const defaultPassword = await hash('password123', 12)
+    const defaultPassword = await resolvePasswordHash({
+      label: 'seed password',
+      saltRounds: 12,
+    })
     const createdEmployees = []
 
     for (const employeeData of EMPLOYEES) {
@@ -359,13 +363,13 @@ async function seed() {
     console.log(`  ⚠️  Слабые (с красными зонами): ${profileCounts.weak || 0}`)
 
     console.log('\n🔐 Данные для входа:')
-    console.log('  Менеджер: manager@callwork.com / manager123')
-    console.log('  Сотрудники: [email] / password123')
+    console.log('  Менеджер: существующий аккаунт (пароль не менялся)')
+    console.log('  Сотрудники: [email] (пароль из SEED_PASSWORD)')
 
     console.log('\n🚀 Откройте http://localhost:3000 и войдите как менеджер!')
 
   } catch (error) {
-    console.error('❌ Ошибка при генерации данных:', error)
+    logError('Ошибка при генерации данных', error)
     throw error
   } finally {
     await prisma.$disconnect()
@@ -375,6 +379,6 @@ async function seed() {
 // Запуск
 seed()
   .catch((error) => {
-    console.error('❌ Критическая ошибка:', error)
+    logError('Критическая ошибка', error)
     process.exit(1)
   })

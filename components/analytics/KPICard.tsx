@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { InlineSparkline } from '@/components/charts/InlineSparkline'
 
@@ -57,8 +57,8 @@ export const KPICard = memo(function KPICard({
             <div className={`
               flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold tabular-nums
               ${isPositive 
-                ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400' 
-                : 'text-rose-700 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-400'
+                ? 'text-[var(--success)] bg-[var(--success)]/10' 
+                : 'text-[var(--danger)] bg-[var(--danger)]/10'
               }
             `}>
               {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}

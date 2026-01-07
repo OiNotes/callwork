@@ -3,6 +3,7 @@
  *
  * Functions for building sparkline histories from report data
  */
+import { roundMoney, toDecimal, toNumber, type Decimal } from '@/lib/utils/decimal'
 
 interface Report {
   date: string | Date
@@ -38,17 +39,17 @@ export function buildKpiHistories(
   }
 
   // Group by date
-  const dailyMap = new Map<string, { sales: number; deals: number; zoom1: number; zoom2: number }>()
+  const dailyMap = new Map<string, { sales: Decimal; deals: number; zoom1: number; zoom2: number }>()
 
   reports.forEach((r) => {
     const dateKey = new Date(r.date).toISOString().split('T')[0]
 
     if (!dailyMap.has(dateKey)) {
-      dailyMap.set(dateKey, { sales: 0, deals: 0, zoom1: 0, zoom2: 0 })
+      dailyMap.set(dateKey, { sales: toDecimal(0), deals: 0, zoom1: 0, zoom2: 0 })
     }
 
     const entry = dailyMap.get(dateKey)!
-    entry.sales += Number(r.monthlySalesAmount || 0)
+    entry.sales = entry.sales.plus(toDecimal(r.monthlySalesAmount || 0))
     entry.deals += Number(r.successfulDeals || 0)
     entry.zoom1 += Number(r.pzmConducted || 0)
     entry.zoom2 += Number(r.vzmConducted || 0)
@@ -60,7 +61,7 @@ export function buildKpiHistories(
     .slice(-days)
 
   return {
-    sales: sortedEntries.map(([, v]) => v.sales),
+    sales: sortedEntries.map(([, v]) => toNumber(roundMoney(v.sales))),
     deals: sortedEntries.map(([, v]) => v.deals),
     zoom1: sortedEntries.map(([, v]) => v.zoom1),
     zoom2: sortedEntries.map(([, v]) => v.zoom2),
@@ -121,10 +122,10 @@ export function buildManagerSparklines(
  * @returns Cumulative sum array
  */
 export function buildCumulativeSum(values: number[]): number[] {
-  let sum = 0
+  let sum = toDecimal(0)
   return values.map((v) => {
-    sum += v
-    return sum
+    sum = sum.plus(toDecimal(v))
+    return toNumber(roundMoney(sum))
   })
 }
 

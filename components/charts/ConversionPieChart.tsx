@@ -2,11 +2,13 @@
 
 import { memo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { BarChart2 } from 'lucide-react'
 
 interface ConversionData {
   name: string
   value: number
-  [key: string]: any // для совместимости с Recharts ChartDataInput
+  [key: string]: unknown // для совместимости с Recharts ChartDataInput
 }
 
 interface ConversionPieChartProps {
@@ -16,6 +18,16 @@ interface ConversionPieChartProps {
 const COLORS = ['var(--success)', 'var(--primary)', 'var(--warning)', 'var(--danger)']
 
 export const ConversionPieChart = memo(function ConversionPieChart({ data }: ConversionPieChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <EmptyState
+        icon={<BarChart2 className="w-6 h-6" />}
+        title="Нет данных"
+        description="Данные появятся после создания отчётов"
+      />
+    )
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
@@ -30,7 +42,7 @@ export const ConversionPieChart = memo(function ConversionPieChart({ data }: Con
           stroke="none"
         >
           {data.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
         <Tooltip

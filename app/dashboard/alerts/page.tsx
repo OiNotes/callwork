@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { AlertCard } from '@/components/alerts/AlertCard'
 import { Bell, BellOff, CheckCheck } from 'lucide-react'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { SkeletonCard } from '@/components/ui/SkeletonCard'
+import { logError } from '@/lib/logger'
 
 interface Alert {
   id: string
@@ -18,73 +21,111 @@ interface Alert {
   }
 }
 
+interface PaginationMeta {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+const PAGE_SIZE = 50
+
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [severityFilter, setSeverityFilter] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null)
 
-  const fetchAlerts = useCallback(async () => {
-    setLoading(true)
+  const handleFilterClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const value = event.currentTarget.dataset.filter as 'all' | 'unread' | undefined
+    if (!value) return
+    setFilter(value)
+  }, [])
+
+  const handleSeverityClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const value = event.currentTarget.dataset.severity
+    setSeverityFilter(value ? value : null)
+  }, [])
+
+  const fetchAlerts = useCallback(async (pageToLoad = 1, append = false) => {
+    if (append) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+    }
     try {
       const params = new URLSearchParams()
       if (filter === 'unread') params.set('isRead', 'false')
       if (severityFilter) params.set('severity', severityFilter)
+      params.set('page', String(pageToLoad))
+      params.set('limit', String(PAGE_SIZE))
 
       const res = await fetch(`/api/alerts?${params}`)
       const data = await res.json()
 
-      setAlerts(data.alerts)
-      setUnreadCount(data.unreadCount)
+      const items = Array.isArray(data.data) ? data.data : []
+      setAlerts((prev) => (append ? [...prev, ...items] : items))
+      setUnreadCount(data.unreadCount || 0)
+      setPagination(data.pagination ?? null)
+      setPage(pageToLoad)
     } catch (error) {
-      console.error('Failed to fetch alerts:', error)
+      logError('Failed to fetch alerts', error)
     } finally {
-      setLoading(false)
+      if (append) {
+        setLoadingMore(false)
+      } else {
+        setLoading(false)
+      }
     }
   }, [filter, severityFilter])
 
   useEffect(() => {
-    fetchAlerts()
+    fetchAlerts(1)
   }, [fetchAlerts])
 
-  async function markAsRead(id: string) {
+  const markAsRead = useCallback(async (id: string) => {
     try {
       await fetch(`/api/alerts/${id}/read`, { method: 'PATCH' })
-      setAlerts(alerts.map((a) => a.id === id ? { ...a, isRead: true } : a))
-      setUnreadCount(Math.max(0, unreadCount - 1))
+      setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, isRead: true } : a))
+      setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch (error) {
-      console.error('Failed to mark alert as read:', error)
+      logError('Failed to mark alert as read', error)
     }
-  }
+  }, [])
 
-  async function markAllAsRead() {
+  const markAllAsRead = useCallback(async () => {
     try {
       await fetch('/api/alerts', { method: 'POST' })
-      setAlerts(alerts.map((a) => ({ ...a, isRead: true })))
+      setAlerts((prev) => prev.map((a) => ({ ...a, isRead: true })))
       setUnreadCount(0)
     } catch (error) {
-      console.error('Failed to mark all as read:', error)
+      logError('Failed to mark all as read', error)
     }
-  }
+  }, [])
 
-  const filteredAlerts = alerts.filter((alert) => {
-    if (filter === 'unread' && alert.isRead) return false
-    if (severityFilter && alert.severity !== severityFilter) return false
-    return true
-  })
+  const handleLoadMore = useCallback(() => {
+    if (!pagination?.hasNext || loadingMore) return
+    fetchAlerts(page + 1, true)
+  }, [fetchAlerts, loadingMore, page, pagination?.hasNext])
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
             <Bell className="w-8 h-8" />
             Уведомления
           </h1>
           {unreadCount > 0 && (
-            <p className="text-gray-600 mt-2">
+            <p className="text-[var(--muted-foreground)] mt-2">
               {unreadCount} непрочитанных
             </p>
           )}
@@ -93,7 +134,7 @@ export default function AlertsPage() {
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
-            className="px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl hover:bg-[var(--primary-hover)] transition-colors flex items-center gap-2"
           >
             <CheckCheck className="w-4 h-4" />
             Отметить все прочитанными
@@ -102,25 +143,27 @@ export default function AlertsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap gap-4">
         {/* Status filter */}
         <div className="flex gap-2">
           <button
-            onClick={() => setFilter('all')}
+            data-filter="all"
+            onClick={handleFilterClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               filter === 'all'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Все
           </button>
           <button
-            onClick={() => setFilter('unread')}
+            data-filter="unread"
+            onClick={handleFilterClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               filter === 'unread'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Непрочитанные {unreadCount > 0 && `(${unreadCount})`}
@@ -128,43 +171,47 @@ export default function AlertsPage() {
         </div>
 
         {/* Severity filter */}
-        <div className="flex gap-2 ml-auto">
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
           <button
-            onClick={() => setSeverityFilter(null)}
+            data-severity=""
+            onClick={handleSeverityClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               !severityFilter
-                ? 'bg-gray-700 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--foreground)] text-[var(--background)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Все уровни
           </button>
           <button
-            onClick={() => setSeverityFilter('CRITICAL')}
+            data-severity="CRITICAL"
+            onClick={handleSeverityClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               severityFilter === 'CRITICAL'
-                ? 'bg-red-500 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--danger)] text-[var(--status-foreground)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Критичные
           </button>
           <button
-            onClick={() => setSeverityFilter('WARNING')}
+            data-severity="WARNING"
+            onClick={handleSeverityClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               severityFilter === 'WARNING'
-                ? 'bg-orange-500 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--warning)] text-[var(--status-foreground)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Предупреждения
           </button>
           <button
-            onClick={() => setSeverityFilter('INFO')}
+            data-severity="INFO"
+            onClick={handleSeverityClick}
             className={`px-4 py-2 rounded-xl font-medium transition-all ${
               severityFilter === 'INFO'
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-100'
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                : 'bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
             }`}
           >
             Инфо
@@ -174,16 +221,18 @@ export default function AlertsPage() {
 
       {/* Alerts list */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500" />
+        <div className="space-y-4">
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={3} />
         </div>
-      ) : filteredAlerts.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center">
-          <BellOff className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
+      ) : alerts.length === 0 ? (
+        <div className="bg-[var(--card)] rounded-2xl p-12 text-center border border-[var(--border)] shadow-[var(--shadow-sm)]">
+          <BellOff className="w-16 h-16 text-[var(--muted-foreground)] mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">
             Нет уведомлений
           </h3>
-          <p className="text-gray-500">
+          <p className="text-[var(--muted-foreground)]">
             {filter === 'unread' 
               ? 'Все уведомления прочитаны' 
               : 'У вас пока нет уведомлений'}
@@ -191,7 +240,7 @@ export default function AlertsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredAlerts.map((alert) => (
+          {alerts.map((alert) => (
             <AlertCard
               key={alert.id}
               alert={alert}
@@ -200,6 +249,18 @@ export default function AlertsPage() {
           ))}
         </div>
       )}
-    </div>
+      {pagination?.hasNext && !loading && (
+        <div className="flex justify-center">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="px-4 py-2 rounded-xl bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? 'Загрузка...' : 'Показать ещё'}
+          </button>
+        </div>
+      )}
+      </div>
+    </DashboardLayout>
   )
 }

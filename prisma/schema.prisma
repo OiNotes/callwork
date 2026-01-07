@@ -4,12 +4,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("POSTGRES_URL") // Vercel Postgres auto-created variable
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
   EMPLOYEE
   MANAGER
+  ADMIN
 }
 
 enum AlertType {
@@ -37,6 +38,16 @@ enum PaymentStatus {
   PAID
 }
 
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  PASSWORD_CHANGE
+  USER_CREATE
+  USER_UPDATE
+  SETTINGS_CHANGE
+  GOAL_UPDATE
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -48,6 +59,7 @@ model User {
   codeExpiresAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
 
   // НОВЫЕ ПОЛЯ для целей и статуса
   monthlyGoal Decimal? @db.Decimal(12, 2) /// Месячная цель продаж (nullable)
@@ -56,6 +68,8 @@ model User {
   reports      Report[]
   deals        Deal[]
   alerts       Alert[] /// Связь с алертами
+  sessions     UserSession[]
+  auditLogs    AuditLog[]
   managedUsers User[]   @relation("ManagerToEmployees")
   manager      User?    @relation("ManagerToEmployees", fields: [managerId], references: [id], onDelete: SetNull)
   managerId    String?
@@ -65,6 +79,39 @@ model User {
   @@index([telegramId])
   @@index([telegramCode])
   @@index([managerId])
+}
+
+model UserSession {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([userId])
+  @@index([revokedAt])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  action       AuditAction
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  targetUserId String?
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([targetUserId])
 }
 
 model Report {
@@ -104,6 +151,8 @@ model Report {
   @@index([date])
   // Composite index for reporting queries
   @@index([date, userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 model Alert {
@@ -112,6 +161,7 @@ model Alert {
   severity    AlertSeverity /// Критичность
   title       String /// Заголовок
   description String /// Описание
+  alertKey    String? /// Идентификатор для идемпотентности
   userId      String? /// Связь с сотрудником (nullable)
   user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   isRead      Boolean       @default(false) /// Прочитано ли
@@ -119,9 +169,11 @@ model Alert {
 
   @@index([isRead])
   @@index([createdAt])
+  @@index([alertKey])
   @@index([userId])
   // Composite index for fetching unread alerts for a user
   @@index([userId, isRead])
+  @@index([userId, isRead, createdAt])
 }
 
 model Deal {
@@ -143,6 +195,10 @@ model Deal {
   @@index([isFocus])
   @@index([closedAt])
   @@index([paidAt])
+  @@index([createdAt])
+  @@index([managerId, status, createdAt])
+  @@index([managerId, status, updatedAt])
+  @@index([managerId, isFocus, updatedAt])
 }
 
 model MotivationGrade {
@@ -161,6 +217,11 @@ model RopSettings {
   departmentGoal       Decimal? @db.Decimal(12, 2)
   conversionBenchmarks Json?
   alertThresholds      Json?
+  alertNoReportDays    Int      @default(2)
+  alertNoDealsDays     Int      @default(5)
+  alertConversionDrop  Int      @default(20)
+  telegramRegistrationTtl Int   @default(15)
+  telegramReportTtl    Int      @default(30)
   activityScoreTarget  Int?     @default(80)
   salesPerDeal         Decimal? @db.Decimal(12, 2)
   motivationGrades     Json?

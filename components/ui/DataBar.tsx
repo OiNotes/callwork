@@ -1,7 +1,8 @@
 'use client'
 
 import { memo } from 'react'
-import { motion } from 'framer-motion'
+import { motion } from '@/lib/motion'
+import { calcPercent, roundPercent, toDecimal } from '@/lib/utils/decimal'
 
 interface DataBarProps {
   /** Current value */
@@ -36,7 +37,7 @@ function DataBarComponent({
   compact = false,
 }: DataBarProps) {
   const safeMax = max > 0 ? max : 1
-  const percent = Math.min(100, (value / safeMax) * 100)
+  const percent = Math.min(100, roundPercent(calcPercent(toDecimal(value), toDecimal(safeMax))))
 
   // Auto-determine color based on performance (relative to average)
   const getAutoColor = () => {

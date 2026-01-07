@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -82,7 +83,14 @@ async function initRopSettings() {
     console.log(`\n📅 Период:`)
     console.log(`  Начало периода: ${settings.periodStartDay}-е число месяца`)
 
-    const benchmarks = settings.conversionBenchmarks as any
+    type ConversionBenchmarksPayload = {
+      bookedToZoom1?: number
+      zoom1ToZoom2?: number
+      zoom2ToContract?: number
+      contractToPush?: number
+      pushToDeal?: number
+    }
+    const benchmarks = settings.conversionBenchmarks as ConversionBenchmarksPayload | null
     console.log(`\n📈 Нормы конверсий:`)
     console.log(`  Записан → 1-й Zoom: ${benchmarks?.bookedToZoom1 || 60}%`)
     console.log(`  1-й Zoom → 2-й Zoom: ${benchmarks?.zoom1ToZoom2 || 50}%`)
@@ -94,14 +102,17 @@ async function initRopSettings() {
     console.log(`  North Star (1-й Zoom → Оплата): ${settings.northStarTarget}%`)
     console.log(`  Целевая активность: ${settings.activityScoreTarget}`)
 
-    const thresholds = settings.alertThresholds as any
+    const thresholds = settings.alertThresholds as { redZoneTolerance?: number } | null
     console.log(`\n⚠️  Пороги:`)
     console.log(`  Допуск красной зоны: ${thresholds?.redZoneTolerance || 10}%`)
 
     console.log(`\n💼 Грейды мотивации:`)
-    const grades = settings.motivationGrades as any
+    type MotivationGradesPayload = {
+      grades?: Array<{ minTurnover: number; maxTurnover?: number | null; commissionRate: number }>
+    }
+    const grades = settings.motivationGrades as MotivationGradesPayload | null
     if (grades?.grades) {
-      grades.grades.forEach((g: any, i: number) => {
+      grades.grades.forEach((g, i: number) => {
         const max = g.maxTurnover ? Number(g.maxTurnover).toLocaleString() : '∞'
         console.log(`  ${i + 1}. ${Number(g.minTurnover).toLocaleString()} - ${max} ₽ → ${(g.commissionRate * 100).toFixed(0)}%`)
       })
@@ -111,7 +122,7 @@ async function initRopSettings() {
     console.log('\n✨ Теперь зайдите на /dashboard/settings/rop для настройки!\n')
 
   } catch (error) {
-    console.error('\n❌ Ошибка при создании настроек:', error)
+    logError('Ошибка при создании настроек', error)
     throw error
   }
 }
@@ -121,8 +132,8 @@ async function main() {
 }
 
 main()
-  .catch(error => {
-    console.error('\n💥 КРИТИЧЕСКАЯ ОШИБКА:', error)
+  .catch((error) => {
+    logError('Критическая ошибка', error)
     process.exit(1)
   })
   .finally(async () => {

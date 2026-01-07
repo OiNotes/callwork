@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_DIR="/Users/sile/Documents/Status Stock 4.0/Call stat/callwork"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
 echo "🐳 Запуск Callwork с Docker PostgreSQL..."
@@ -25,6 +25,23 @@ if ! command -v docker &> /dev/null; then
 fi
 
 echo -e "${GREEN}✓${NC} Docker найден"
+
+# Подтянуть переменные из .env (если есть)
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
+if [ -z "${POSTGRES_PASSWORD}" ]; then
+    echo -e "${RED}❌ POSTGRES_PASSWORD не задан (экспортируйте переменную или добавьте в .env)${NC}"
+    exit 1
+fi
+
+if [ -z "${PGADMIN_DEFAULT_PASSWORD}" ]; then
+    echo -e "${RED}❌ PGADMIN_DEFAULT_PASSWORD не задан (экспортируйте переменную или добавьте в .env)${NC}"
+    exit 1
+fi
 
 # Запуск Docker Compose
 echo ""
@@ -63,12 +80,12 @@ echo "📊 PostgreSQL:"
 echo "   Host: localhost:5432"
 echo "   Database: callwork"
 echo "   User: callwork_user"
-echo "   Password: callwork_password"
+echo "   Password: (set via POSTGRES_PASSWORD)"
 echo ""
 echo "🔧 pgAdmin:"
 echo "   URL: http://localhost:5050"
-echo "   Email: admin@callwork.local"
-echo "   Password: admin123"
+echo "   Email: ${PGADMIN_DEFAULT_EMAIL:-admin@callwork.local}"
+echo "   Password: (set via PGADMIN_DEFAULT_PASSWORD)"
 echo ""
 echo "Теперь запустите приложение:"
 echo "  npm run dev          # Next.js"

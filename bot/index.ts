@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api'
 import { PrismaClient } from '@prisma/client'
 import dotenv from 'dotenv'
+import { logError } from '../lib/logger'
 
 // Импортируем handlers
 import { startHandler } from './handlers/start'
@@ -22,14 +23,14 @@ const prisma = new PrismaClient()
 const token = process.env.TELEGRAM_BOT_TOKEN
 
 if (!token) {
-  console.error('❌ TELEGRAM_BOT_TOKEN не найден в .env файле')
+  logError('TELEGRAM_BOT_TOKEN не найден в .env файле')
   process.exit(1)
 }
 
 // Создаём экземпляр бота с polling
 const bot = new TelegramBot(token, { polling: true })
 
-console.log('🤖 Callwork Bot запущен...')
+console.info('🤖 Callwork Bot запущен...')
 
 // ============================================
 // COMMAND HANDLERS
@@ -66,7 +67,7 @@ bot.on('callback_query', (query: TelegramBot.CallbackQuery) => {
   }
 
   // Обработка подтверждения/отмены отчёта
-  if (data === 'confirm_report' || data === 'cancel_report') {
+  if (data === 'confirm_report' || data === 'cancel_report' || data === 'confirm_overwrite') {
     handleReportConfirm(bot, query, prisma)
     return
   }
@@ -97,7 +98,7 @@ bot.on('message', (msg: TelegramBot.Message) => {
 
 // Обработка ошибок polling
 bot.on('polling_error', (error: Error) => {
-  console.error('❌ Polling error:', error)
+  logError('Polling error', error)
 })
 
 
@@ -108,14 +109,14 @@ bot.on('polling_error', (error: Error) => {
 
 // Обработка завершения процесса
 process.on('SIGINT', async () => {
-  console.log('\n🛑 Остановка бота...')
+  console.info('\n🛑 Остановка бота...')
   await prisma.$disconnect()
   await bot.stopPolling()
   process.exit(0)
 })
 
 process.on('SIGTERM', async () => {
-  console.log('\n🛑 Остановка бота...')
+  console.info('\n🛑 Остановка бота...')
   await prisma.$disconnect()
   await bot.stopPolling()
   process.exit(0)
@@ -123,11 +124,11 @@ process.on('SIGTERM', async () => {
 
 // Обработка необработанных ошибок
 process.on('unhandledRejection', (error) => {
-  console.error('❌ Unhandled rejection:', error)
+  logError('Unhandled rejection', error)
 })
 
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught exception:', error)
+  logError('Uncaught exception', error)
   process.exit(1)
 })
 

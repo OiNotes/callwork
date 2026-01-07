@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { logError } from '../lib/logger'
 
 const prisma = new PrismaClient()
 
@@ -20,7 +21,7 @@ async function main() {
   })
 
   if (!manager) {
-    console.error('❌ Manager not found!')
+    logError('Manager not found')
     return
   }
 
@@ -79,5 +80,5 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((error) => logError(error))
   .finally(() => prisma.$disconnect())

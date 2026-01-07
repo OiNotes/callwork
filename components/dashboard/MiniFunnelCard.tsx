@@ -1,10 +1,12 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { AlertTriangle, TrendingUp } from 'lucide-react'
+import { motion } from '@/lib/motion'
+import { AlertTriangle, TrendingUp, BarChart2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useCallback } from 'react'
 import { getConversionColor, formatPercent } from '@/lib/calculations/funnel'
 import type { FunnelStage } from '@/lib/calculations/funnel'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface MiniFunnelCardProps {
   employeeId: string
@@ -16,19 +18,43 @@ interface MiniFunnelCardProps {
 export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: MiniFunnelCardProps) {
   const router = useRouter()
 
-  if (!funnel || funnel.length === 0) return null
+  if (!funnel || funnel.length === 0) {
+    return (
+      <div className="glass-card p-4">
+        <EmptyState
+          icon={<BarChart2 className="w-6 h-6" />}
+          title="Нет данных воронки"
+          description="Данные появятся после создания отчётов"
+          compact
+        />
+      </div>
+    )
+  }
 
   const finalConversion = funnel[funnel.length - 1]?.conversion || 0
   const maxValue = funnel[0]?.value || 1
+  const handleCardClick = useCallback(() => {
+    router.push(`/dashboard/employee/${employeeId}`)
+  }, [router, employeeId])
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.currentTarget.click()
+    }
+  }, [])
 
   return (
     <motion.div
       className="glass-card p-5 border border-[var(--border)] cursor-pointer h-[360px] flex flex-col"
       whileHover={{ scale: 1.02, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
-      onClick={() => router.push(`/dashboard/employee/${employeeId}`)}
+      onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
+      role="button"
+      tabIndex={0}
+      aria-label="Открыть детали воронки"
     >
       {/* Header */}
       <div className="mb-4">
@@ -66,10 +92,10 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
                 className="h-6 rounded-md transition-all duration-300"
                 style={{
                   width: `${Math.max(widthPercent, 15)}%`,
-                  background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`,
+                  backgroundColor: color,
                 }}
               >
-                <div className="flex items-center justify-center h-full text-white text-xs font-medium">
+                <div className="flex items-center justify-center h-full text-[var(--status-foreground)] text-xs font-medium">
                   {stage.value}
                 </div>
               </div>
@@ -82,7 +108,7 @@ export function MiniFunnelCard({ employeeId, employeeName, funnel, redZones }: M
       <div className="mt-4 pt-3 border-t border-[var(--border)]">
         {redZones.length > 0 ? (
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 text-[var(--danger)] flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[var(--danger)] font-medium">Red Zones:</p>
               <p className="text-xs text-[var(--muted-foreground)] truncate">

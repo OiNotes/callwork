@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { RopSettingsService } from '@/lib/services/RopSettingsService'
-import { toDecimal, sumDecimals, toNumber } from '@/lib/utils/decimal'
+import { roundMoney, toDecimal, sumDecimals, toNumber } from '@/lib/utils/decimal'
 
 /**
  * GoalService - единый источник данных для целей продаж
@@ -11,15 +11,41 @@ export class GoalService {
   /**
    * Получить месячную цель конкретного пользователя
    * @param userId - ID пользователя
-   * @returns Цель пользователя в рублях или 0 если не установлена
+   * @returns Цель пользователя в рублях или null если не установлена
    */
-  static async getUserGoal(userId: string): Promise<number> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+  static async getUserGoal(userId: string): Promise<number | null> {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, isActive: true },
       select: { monthlyGoal: true }
     })
 
-    return toNumber(toDecimal(user?.monthlyGoal))
+    if (!user || user.monthlyGoal === null) {
+      return null
+    }
+
+    return toNumber(toDecimal(user.monthlyGoal))
+  }
+
+  /**
+   * Получить цели для набора пользователей (без неактивных)
+   * @param userIds - список ID пользователей
+   * @returns Map userId -> goal (0 если отсутствует или неактивен)
+   */
+  static async getUsersGoals(userIds: string[]): Promise<Record<string, number>> {
+    if (userIds.length === 0) {
+      return {}
+    }
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds }, isActive: true },
+      select: { id: true, monthlyGoal: true },
+    })
+
+    const goalsById = new Map(users.map((u) => [u.id, toNumber(toDecimal(u.monthlyGoal))]))
+    return userIds.reduce<Record<string, number>>((acc, id) => {
+      acc[id] = goalsById.get(id) ?? 0
+      return acc
+    }, {})
   }
 
   /**
@@ -56,7 +82,7 @@ export class GoalService {
    */
   static async hasGoal(userId: string): Promise<boolean> {
     const goal = await this.getUserGoal(userId)
-    return goal > 0
+    return goal !== null && goal > 0
   }
 
   /**
@@ -96,5 +122,18 @@ export class GoalService {
         goal: toNumber(toDecimal(user.monthlyGoal))
       }))
     }
+  }
+
+  /**
+   * Установить месячную цель пользователя (с нормализацией в Decimal).
+   * @param userId - ID пользователя
+   * @param monthlyGoal - новая цель или null для сброса
+   */
+  static async setUserGoal(userId: string, monthlyGoal: number | null): Promise<void> {
+    const normalized = monthlyGoal === null ? null : toNumber(roundMoney(toDecimal(monthlyGoal)))
+    await prisma.user.update({
+      where: { id: userId },
+      data: { monthlyGoal: normalized },
+    })
   }
 }
